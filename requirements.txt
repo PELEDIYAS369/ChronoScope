@@ -1,0 +1,28 @@
+# Core
+numpy==2.2.1
+pandas==2.2.3
+scipy==1.15.1
+
+# Telemetry parsing
+construct==2.10.68
+bitstring==4.1.4
+
+# API layer
+fastapi==0.115.6
+uvicorn==0.34.0
+pydantic==2.10.4
+
+# Testing
+pytest==8.3.4
+pytest-cov==6.0.0
+httpx==0.28.1
+
+# Observability
+structlog==24.4.0
+
+# Security
+cryptography==44.0.0
+
+# Data formats
+h5py==3.12.1
+requests==2.32.3
