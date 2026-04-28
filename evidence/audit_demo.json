@@ -1,0 +1,155 @@
+{
+  "log_id": "b8412433-d0d3-4719-8ff8-6c1c88281cbb",
+  "version": "1.0",
+  "genesis_hash": "611ef2605632c67df5c35413279988f1fce3ab0241f98378cfc1121a8ba66069",
+  "entry_count": 10,
+  "latest_hash": "a878447c54302889497bbb20fb8553c8e4364f879843d45e5eda98be54c988b1",
+  "chain_intact": true,
+  "chain_error": null,
+  "entries": [
+    {
+      "entry_id": "9adc417d-1522-430e-b206-5a67016fd2ea",
+      "timestamp": "2026-04-28T18:54:59.285002+00:00",
+      "event_type": "system_startup",
+      "actor": "system",
+      "session_id": null,
+      "spacecraft_id": null,
+      "details": {
+        "ingester": "noaa_dscovr",
+        "rules": 4
+      },
+      "previous_hash": "611ef2605632c67df5c35413279988f1fce3ab0241f98378cfc1121a8ba66069",
+      "entry_hash": "4efbeb3ebd59113d27ac6d3869f63b11cfdaceca87201f6658cc32c25c66c868"
+    },
+    {
+      "entry_id": "a804cbd2-27bb-443c-9ac2-acf317902cbd",
+      "timestamp": "2026-04-28T18:54:59.287069+00:00",
+      "event_type": "session_created",
+      "actor": "demo_operator",
+      "session_id": "e9b42a3e-6df0-409f-945e-d28f7c367832",
+      "spacecraft_id": "DSCOVR",
+      "details": {
+        "spacecraft_id": "DSCOVR",
+        "mission_phase": "nominal",
+        "start_time": "2026-04-28T12:54:59.287021+00:00",
+        "end_time": "2026-04-28T18:54:59.287021+00:00"
+      },
+      "previous_hash": "4efbeb3ebd59113d27ac6d3869f63b11cfdaceca87201f6658cc32c25c66c868",
+      "entry_hash": "48f41ed02a7fd57823ebb8c91629d5eb0d48e2b27363a60ef0e6be462d1ddc9d"
+    },
+    {
+      "entry_id": "142906ae-d5b6-4b45-96ea-e5193ce23a89",
+      "timestamp": "2026-04-28T18:54:59.288971+00:00",
+      "event_type": "ingestion_started",
+      "actor": "demo_operator",
+      "session_id": "e9b42a3e-6df0-409f-945e-d28f7c367832",
+      "spacecraft_id": "DSCOVR",
+      "details": {
+        "start_time": "2026-04-28T12:54:59.287021+00:00",
+        "end_time": "2026-04-28T18:54:59.287021+00:00",
+        "source": "noaa_dscovr"
+      },
+      "previous_hash": "48f41ed02a7fd57823ebb8c91629d5eb0d48e2b27363a60ef0e6be462d1ddc9d",
+      "entry_hash": "664d8a89a83aa77ecd9bbf9723ab5152218b290dc377a3fa7a5660718834edc1"
+    },
+    {
+      "entry_id": "647c3a2f-c054-46e3-9e09-4da067b3812c",
+      "timestamp": "2026-04-28T18:54:59.693602+00:00",
+      "event_type": "ingestion_completed",
+      "actor": "demo_operator",
+      "session_id": "e9b42a3e-6df0-409f-945e-d28f7c367832",
+      "spacecraft_id": "DSCOVR",
+      "details": {
+        "packets_ingested": 684,
+        "packets_failed": 0,
+        "success_rate": 1.0,
+        "duration_seconds": 0.403851,
+        "errors": []
+      },
+      "previous_hash": "664d8a89a83aa77ecd9bbf9723ab5152218b290dc377a3fa7a5660718834edc1",
+      "entry_hash": "74ff483ebf7df905edbee8fd569a129fbc29bf2ab77947ea2f02bf8b920b104c"
+    },
+    {
+      "entry_id": "3321e2c7-a960-4da7-a6b8-0a11f79bc345",
+      "timestamp": "2026-04-28T18:54:59.698521+00:00",
+      "event_type": "session_loaded",
+      "actor": "demo_operator",
+      "session_id": "e9b42a3e-6df0-409f-945e-d28f7c367832",
+      "spacecraft_id": "DSCOVR",
+      "details": {
+        "packet_count": 684,
+        "start_time": "2026-04-28T12:55:00+00:00",
+        "end_time": "2026-04-28T18:52:00+00:00"
+      },
+      "previous_hash": "74ff483ebf7df905edbee8fd569a129fbc29bf2ab77947ea2f02bf8b920b104c",
+      "entry_hash": "48b6db38d440f8d6e2af6486519af6c3481283f51d3ef08773b446a20de4380b"
+    },
+    {
+      "entry_id": "58e9bfb7-9441-4c98-bba1-30d1db87fb1f",
+      "timestamp": "2026-04-28T18:54:59.700589+00:00",
+      "event_type": "replay_started",
+      "actor": "demo_operator",
+      "session_id": "e9b42a3e-6df0-409f-945e-d28f7c367832",
+      "spacecraft_id": null,
+      "details": {
+        "speed": 1.0
+      },
+      "previous_hash": "48b6db38d440f8d6e2af6486519af6c3481283f51d3ef08773b446a20de4380b",
+      "entry_hash": "93b487f4f84f48425f034844634ce55a16f9c9ec35cd6fc4a3f5e1d0cb023880"
+    },
+    {
+      "entry_id": "1d28eb25-4cdc-4199-baad-c104bbdabf4f",
+      "timestamp": "2026-04-28T18:54:59.701328+00:00",
+      "event_type": "replay_paused",
+      "actor": "demo_operator",
+      "session_id": "e9b42a3e-6df0-409f-945e-d28f7c367832",
+      "spacecraft_id": null,
+      "details": {
+        "index": 0,
+        "progress_pct": 0.0
+      },
+      "previous_hash": "93b487f4f84f48425f034844634ce55a16f9c9ec35cd6fc4a3f5e1d0cb023880",
+      "entry_hash": "67a3910ca535f52483c1afc97183b31bc963ee9daac976863d81550ab100e339"
+    },
+    {
+      "entry_id": "cd984f7b-af1b-4a51-ae94-359b8cde3626",
+      "timestamp": "2026-04-28T18:54:59.702185+00:00",
+      "event_type": "replay_seeked",
+      "actor": "demo_operator",
+      "session_id": "e9b42a3e-6df0-409f-945e-d28f7c367832",
+      "spacecraft_id": null,
+      "details": {
+        "target_time": "2026-04-28T15:54:59.287021+00:00",
+        "landed_index": 343
+      },
+      "previous_hash": "67a3910ca535f52483c1afc97183b31bc963ee9daac976863d81550ab100e339",
+      "entry_hash": "0bd9f76d584b3986b2202094ec10dd375526d09ef60248e599b7a4eddeb2ae29"
+    },
+    {
+      "entry_id": "6d514c6c-62ce-4c81-a013-c0f2c6cb2e54",
+      "timestamp": "2026-04-28T18:54:59.702592+00:00",
+      "event_type": "replay_speed_changed",
+      "actor": "demo_operator",
+      "session_id": "e9b42a3e-6df0-409f-945e-d28f7c367832",
+      "spacecraft_id": null,
+      "details": {
+        "speed": 10.0
+      },
+      "previous_hash": "0bd9f76d584b3986b2202094ec10dd375526d09ef60248e599b7a4eddeb2ae29",
+      "entry_hash": "6e4724d555c51f7db2e9991682cba764900fb4342b2f05180b1cec8d45f26bf9"
+    },
+    {
+      "entry_id": "fadb11e4-be51-4068-97fd-e5d1896787e3",
+      "timestamp": "2026-04-28T18:54:59.704086+00:00",
+      "event_type": "determinism_verified",
+      "actor": "system",
+      "session_id": "e9b42a3e-6df0-409f-945e-d28f7c367832",
+      "spacecraft_id": null,
+      "details": {
+        "result": true
+      },
+      "previous_hash": "6e4724d555c51f7db2e9991682cba764900fb4342b2f05180b1cec8d45f26bf9",
+      "entry_hash": "a878447c54302889497bbb20fb8553c8e4364f879843d45e5eda98be54c988b1"
+    }
+  ]
+}
