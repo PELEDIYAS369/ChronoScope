@@ -416,3 +416,108 @@ class ChronoScopeController:
             "detector_rules": self._detector.rule_count,
             "ingester": self._ingester.source_name,
         }
+
+    # ------------------------------------------------------------------
+    # CLI / Dashboard Helpers
+    # ------------------------------------------------------------------
+
+    def get_health(self) -> dict[str, Any]:
+        """Health check used by CLI and dashboard."""
+        s = self.status()
+        return {
+            "status": "CRITICAL" if s["ai_critical"] > 0 else "NOMINAL",
+            "sessions_loaded": s["sessions"],
+            "total_packets": sum(
+                sess.packet_count for sess in self._sessions.values()
+            ),
+            "total_anomalies": sum(
+                sess.anomaly_count for sess in self._sessions.values()
+            ),
+            "audit_intact": s["audit_chain_intact"],
+            "uptime_seconds": 0.0,
+        }
+
+    def replay_summary(self, session_id: str) -> dict[str, Any]:
+        """Summary of a loaded replay session for CLI display."""
+        session = self.get_session(session_id)
+        fingerprint = self._replay._replay_hashes.get(session_id, "not-loaded")
+        return {
+            "packet_count": session.packet_count,
+            "duration_seconds": session.duration_seconds or 0.0,
+            "start_time": session.start_time.isoformat(),
+            "end_time": session.end_time.isoformat() if session.end_time else None,
+            "anomaly_count": session.anomaly_count,
+            "fingerprint": fingerprint,
+        }
+
+    def get_anomalies(self, session_id: str) -> list[dict[str, Any]]:
+        """Get all anomaly flags for a session, formatted for CLI display."""
+        session = self.get_session(session_id)
+        result = []
+        for flag in session.anomalies:
+            actions = []
+            for report in self._detector._reports.values():
+                if report.flag.flag_id == flag.flag_id:
+                    actions = [
+                        {
+                            "title": a.title,
+                            "success_rate": a.success_rate,
+                        }
+                        for a in report.suggested_actions
+                    ]
+                    break
+            result.append({
+                "flag_id": flag.flag_id,
+                "severity": flag.severity.value,
+                "parameter": flag.parameter_name,
+                "observed_value": flag.observed_value,
+                "reason": flag.reason,
+                "timestamp": flag.timestamp.isoformat(),
+                "acknowledged": flag.acknowledged,
+                "suggested_actions": actions,
+            })
+        return result
+
+    def get_audit_status(self) -> dict[str, Any]:
+        """Audit log status for CLI display."""
+        summary = self.audit_summary()
+        return {
+            "chain_intact": self._audit.verify_chain(),
+            "entry_count": self._audit.entry_count,
+            "algorithm": "sha256",
+            **summary,
+        }
+
+    def export_session(self, session_id: str) -> dict[str, Any]:
+        """Export a session to a JSON-serializable dict."""
+        session = self.get_session(session_id)
+        return {
+            "session_id": session.session_id,
+            "spacecraft_id": session.spacecraft_id,
+            "mission_phase": session.mission_phase.value,
+            "start_time": session.start_time.isoformat(),
+            "end_time": session.end_time.isoformat() if session.end_time else None,
+            "packet_count": session.packet_count,
+            "anomaly_count": session.anomaly_count,
+            "packets": [
+                {
+                    "packet_id": p.packet_id,
+                    "timestamp": p.timestamp.isoformat(),
+                    "apid": p.apid,
+                    "packet_type": p.packet_type.value,
+                    "parameters": p.parameters,
+                }
+                for p in session.packets
+            ],
+            "anomalies": [
+                {
+                    "flag_id": f.flag_id,
+                    "severity": f.severity.value,
+                    "parameter": f.parameter_name,
+                    "observed_value": f.observed_value,
+                    "reason": f.reason,
+                    "timestamp": f.timestamp.isoformat(),
+                }
+                for f in session.anomalies
+            ],
+        }
