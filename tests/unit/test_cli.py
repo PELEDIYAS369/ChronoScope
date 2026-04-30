@@ -73,7 +73,7 @@ class TestCLICommands:
             "uptime_seconds": 3600.0,
         }
         with patch(
-            "src.chronoscope.controller.ChronoScopeController",
+            "src.chronoscope.cli.ChronoScopeController",
             return_value=mock_controller,
         ):
             result = main(["status"])
@@ -87,7 +87,7 @@ class TestCLICommands:
             "algorithm": "sha256",
         }
         with patch(
-            "src.chronoscope.controller.ChronoScopeController",
+            "src.chronoscope.cli.ChronoScopeController",
             return_value=mock_controller,
         ):
             result = main(["audit"])
@@ -101,7 +101,7 @@ class TestCLICommands:
             "algorithm": "sha256",
         }
         with patch(
-            "src.chronoscope.controller.ChronoScopeController",
+            "src.chronoscope.cli.ChronoScopeController",
             return_value=mock_controller,
         ):
             result = main(["audit"])
@@ -118,7 +118,7 @@ class TestCLICommands:
             "fingerprint": "abc123def456abc123def456abc123de",
         }
         with patch(
-            "src.chronoscope.controller.ChronoScopeController",
+            "src.chronoscope.cli.ChronoScopeController",
             return_value=mock_controller,
         ):
             result = main(["replay", "session-abc"])
@@ -128,7 +128,7 @@ class TestCLICommands:
         mock_controller = MagicMock()
         mock_controller.get_anomalies.return_value = []
         with patch(
-            "src.chronoscope.controller.ChronoScopeController",
+            "src.chronoscope.cli.ChronoScopeController",
             return_value=mock_controller,
         ):
             result = main(["anomalies", "session-abc"])
@@ -149,7 +149,7 @@ class TestCLICommands:
             }
         ]
         with patch(
-            "src.chronoscope.controller.ChronoScopeController",
+            "src.chronoscope.cli.ChronoScopeController",
             return_value=mock_controller,
         ):
             result = main(["anomalies", "session-abc"])
@@ -163,7 +163,7 @@ class TestCLICommands:
             "packets": [],
         }
         with patch(
-            "src.chronoscope.controller.ChronoScopeController",
+            "src.chronoscope.cli.ChronoScopeController",
             return_value=mock_controller,
         ), patch("builtins.open", MagicMock()):
             result = main(["export", "session-abc"])
@@ -173,7 +173,7 @@ class TestCLICommands:
         mock_controller = MagicMock()
         mock_controller.replay_summary.side_effect = Exception("Session not found")
         with patch(
-            "src.chronoscope.controller.ChronoScopeController",
+            "src.chronoscope.cli.ChronoScopeController",
             return_value=mock_controller,
         ):
             result = main(["replay", "bad-session-id"])

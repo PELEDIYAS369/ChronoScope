@@ -12,13 +12,13 @@ from datetime import datetime, timezone, timedelta
 from typing import Any
 
 import structlog
+from src.chronoscope.controller import ChronoScopeController
 
 logger = structlog.get_logger(__name__)
 
 
 def cmd_status(args: argparse.Namespace) -> int:
     """Show system status and health."""
-    from src.chronoscope.controller import ChronoScopeController
     controller = ChronoScopeController()
     health = controller.get_health()
     print("\nChronoScope AI — System Status")
@@ -35,8 +35,8 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 def cmd_ingest(args: argparse.Namespace) -> int:
     """Ingest telemetry data into a new session."""
-    from src.chronoscope.controller import ChronoScopeController
     from src.chronoscope.ingestion.noaa_dscovr import NOAADscovrIngester
+    from src.chronoscope.domain.models import MissionPhase
 
     controller = ChronoScopeController()
     ingester = NOAADscovrIngester()
@@ -44,7 +44,6 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     hours = getattr(args, "hours", 2)
     end_time = datetime.now(timezone.utc)
     start_time = end_time - timedelta(hours=hours)
-
     spacecraft = getattr(args, "spacecraft", "DSCOVR")
 
     print(f"\nIngesting {hours}h of {spacecraft} telemetry...")
@@ -52,20 +51,26 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     print(f"  Window: {start_time.strftime('%Y-%m-%d %H:%M')} → "
           f"{end_time.strftime('%H:%M')} UTC")
 
-    result = controller.ingest(
+    session = controller.create_session(
         spacecraft_id=spacecraft,
+        mission_phase=MissionPhase.NOMINAL,
         start_time=start_time,
         end_time=end_time,
+    )
+    result = controller.ingest(
+        session_id=session.session_id,
         ingester=ingester,
+        start_time=start_time,
+        end_time=end_time,
     )
 
-    if result["success"]:
-        print(f"\n  ✓ {result['packets_ingested']} packets ingested")
-        print(f"  ✓ Session: {result['session_id']}")
-        print(f"  ✓ Duration: {result['duration_seconds']:.2f}s")
+    if result.success:
+        print(f"\n  ✓ {result.packets_ingested} packets ingested")
+        print(f"  ✓ Session: {session.session_id}")
+        print(f"  ✓ Duration: {result.duration_seconds:.2f}s")
     else:
         print(f"\n  ✗ Ingestion failed")
-        for err in result.get("errors", []):
+        for err in result.errors:
             print(f"    - {err}")
         return 1
 
@@ -74,8 +79,6 @@ def cmd_ingest(args: argparse.Namespace) -> int:
 
 def cmd_replay(args: argparse.Namespace) -> int:
     """Replay a session and print packet summary."""
-    from src.chronoscope.controller import ChronoScopeController
-
     session_id = args.session_id
     controller = ChronoScopeController()
 
@@ -99,8 +102,6 @@ def cmd_replay(args: argparse.Namespace) -> int:
 
 def cmd_anomalies(args: argparse.Namespace) -> int:
     """List anomalies for a session."""
-    from src.chronoscope.controller import ChronoScopeController
-
     session_id = args.session_id
     controller = ChronoScopeController()
 
@@ -131,8 +132,6 @@ def cmd_anomalies(args: argparse.Namespace) -> int:
 
 def cmd_audit(args: argparse.Namespace) -> int:
     """Verify and display audit log status."""
-    from src.chronoscope.controller import ChronoScopeController
-
     controller = ChronoScopeController()
 
     print("\nChronoScope AI — Audit Log Verification")
@@ -159,13 +158,11 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
 def cmd_export(args: argparse.Namespace) -> int:
     """Export session data to JSON."""
-    from src.chronoscope.controller import ChronoScopeController
-
     session_id = args.session_id
-    output_file = getattr(args, "output", f"chronoscope_export_{session_id[:8]}.json")
+    output_file = getattr(args, "output", None) or f"chronoscope_export_{session_id[:8]}.json"
     controller = ChronoScopeController()
 
-    print(f"\nExporting session {session_id[:8]}... to {output_file}")
+    print(f"\nExporting session {session_id[:8]}... to{output_file}")
 
     try:
         data = controller.export_session(session_id)
@@ -239,7 +236,7 @@ def main(argv: list[str] | None = None) -> int:
     handler = commands.get(args.command)
     if not handler:
         parser.print_help()
-        return 1
+        return 0
 
     return handler(args)
 

@@ -1,0 +1,33 @@
+{
+  "report_id": "0d706a77-d99e-4db4-8bc8-7f4783bd1c71",
+  "generated_at": "2026-04-30T00:58:55.988738+00:00",
+  "session_id": "1b5d6f7b-d1de-43e3-9d2a-8e145ba7060a",
+  "spacecraft_id": "DSCOVR",
+  "mission_phase": "nominal",
+  "start_time": "2026-04-29T22:58:55.558237+00:00",
+  "end_time": "2026-04-30T00:58:55.558237+00:00",
+  "duration_seconds": 7200.0,
+  "health_rating": "NOMINAL",
+  "telemetry": {
+    "total_packets": 232,
+    "packets_per_hour": 116.0
+  },
+  "anomalies": {
+    "total": 0,
+    "by_severity": {},
+    "unacknowledged": 0,
+    "critical_details": []
+  },
+  "audit": {
+    "total_entries": 7,
+    "chain_intact": true
+  },
+  "determinism": {
+    "fingerprint": "571a16ffdf26d853f43c39743743f814c2a87797ec85f6985f3a1a2a1af1aba6",
+    "verified": true
+  },
+  "recommendations": [
+    "All systems nominal. Continue standard monitoring procedures."
+  ],
+  "anomaly_details": []
+}
