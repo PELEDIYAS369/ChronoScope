@@ -105,8 +105,8 @@ class OpenSkyIngester(BaseIngester):
 
                 ts = datetime.fromtimestamp(last_contact, tz=timezone.utc) if last_contact else now
 
-                if ts < start_time or ts > end_time:
-                    ts = now
+                
+                ts = now
 
                 raw = struct.pack(
                     ">ffffff",
