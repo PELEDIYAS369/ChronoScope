@@ -88,7 +88,7 @@ async def dashboard_ingest(source: str):
     except Exception as e:
         import traceback
         return {"success": False, "error": str(e), "trace": traceback.format_exc()}
-        
+
 @dashboard_router.get("/dashboard/data", tags=["Dashboard"])
 async def dashboard_data():
     global _sessions
@@ -835,18 +835,42 @@ async function ingest(source) {
     log(`✗ ${source}: connection error`, 'err');
   }
 }
-
 // ── Refresh dashboard ──────────────────────────────────────────────
 async function refresh() {
   try {
     const res = await fetch('/dashboard/data');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const d = await res.json();
     lastData = d;
     render(d);
+    // Mark buttons green based on source_stats returned
+    for (const s of d.source_stats) {
+      const btnMap = {
+        'DSCOVR Solar Wind': 'btn-dscovr',
+        'ACE Solar Wind':    'btn-ace',
+        'Live Aircraft':     'btn-opensky',
+        'ISS Orbital':       'btn-celestrak',
+      };
+      const btnId = btnMap[s.label];
+      if (btnId && s.packets > 0) {
+        const btn = document.getElementById(btnId);
+        btn.classList.remove('loading');
+        btn.classList.add('loaded');
+        loadedSources.add(s.label);
+      }
+    }
   } catch(e) {
-    log('Refresh failed', 'err');
+    log('Refresh error: ' + e.message, 'err');
   }
 }
+
+// ── Auto refresh every 30s ─────────────────────────────────────────
+setInterval(() => {
+  refresh();
+}, 30000);
+
+// Initial load on page open
+refresh();
 
 // ── Render ─────────────────────────────────────────────────────────
 function render(d) {
@@ -987,8 +1011,6 @@ setInterval(() => {
     log('Auto-refresh', '');
   }
 }, 30000);
-
-log('Mission control ready', 'ok');
 </script>
 </body>
 </html>
