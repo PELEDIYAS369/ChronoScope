@@ -330,12 +330,49 @@ class DetectionRule:
 
 def build_dscovr_rules() -> list[DetectionRule]:
     """
-    Detection rules for DSCOVR solar wind telemetry.
-    Based on NOAA Space Weather Prediction Center operational thresholds.
-    These are real operational values used for space weather warnings.
+    Complete detection ruleset — solar wind + aviation.
+    7 rules covering all major parameters.
+    Based on NOAA SWPC operational thresholds.
     """
     return [
-        # Solar wind speed anomaly
+        # Ion temperature
+        DetectionRule(
+            rule_id="dscovr-temp-extreme",
+            name="Ion Temperature — Extreme High",
+            parameter_name="ion_temperature_k",
+            min_value=None,
+            max_value=500_000.0,
+            severity=AnomalySeverity.MEDIUM,
+            what_happened_template=(
+                "Ion temperature reached {observed:,.0f} K, "
+                "above the {max:,.0f} K threshold. "
+                "Deviation: {deviation_pct:.1f}%."
+            ),
+            why_it_matters=(
+                "Extremely high ion temperature indicates a hot fast solar "
+                "wind stream — typically a coronal hole high-speed stream. "
+                "Can cause moderate geomagnetic activity for 2-4 days."
+            ),
+            suggested_actions=[
+                SuggestedAction.create(
+                    title="Log HSS event and monitor",
+                    description="Record coronal hole high-speed stream arrival.",
+                    steps=[
+                        "Log HSS arrival in mission record",
+                        "Notify downstream space weather subscribers",
+                        "Set 4-hour monitoring review",
+                    ],
+                    success_rate=0.893,
+                    time_required_minutes=3.0,
+                    risk_if_skipped="Missed documentation of recurring event",
+                    priority=1,
+                ),
+            ],
+            urgency_hours=8.0,
+            similar_events_count=2841,
+        ),
+
+        # Solar wind speed — high
         DetectionRule(
             rule_id="dscovr-speed-high",
             name="Solar Wind Speed — High",
@@ -345,36 +382,28 @@ def build_dscovr_rules() -> list[DetectionRule]:
             severity=AnomalySeverity.HIGH,
             what_happened_template=(
                 "Solar wind speed reached {observed:.1f} km/s, "
-                "exceeding the {max:.0f} km/s operational threshold "
-                "by {deviation_pct:.1f}%. This pattern is consistent "
-                "with a coronal mass ejection (CME) arrival."
+                "exceeding the {max:.0f} km/s threshold. "
+                "Deviation: {deviation_pct:.1f}%. "
+                "CME arrival pattern detected."
             ),
             why_it_matters=(
                 "Elevated solar wind speed indicates increased geomagnetic "
-                "storm risk. Spacecraft in low Earth orbit may experience "
-                "increased drag. Navigation accuracy may degrade. "
-                "Communication disruption possible within 2–6 hours."
+                "storm risk. Spacecraft may experience increased drag. "
+                "Navigation and communication disruption possible."
             ),
             suggested_actions=[
                 SuggestedAction.create(
-                    title="Switch to safe mode",
-                    description=(
-                        "Reduce spacecraft power draw and enable "
-                        "radiation protection protocols."
-                    ),
+                    title="Switch spacecraft to safe mode",
+                    description="Reduce power draw and enable radiation protection.",
                     steps=[
                         "Confirm CME arrival via magnetic field data",
                         "Notify mission director",
                         "Execute safe mode command sequence",
                         "Reduce telemetry to essential housekeeping",
-                        "Monitor recovery window",
                     ],
                     success_rate=0.942,
                     time_required_minutes=12.0,
-                    risk_if_skipped=(
-                        "Battery damage, sensor degradation, "
-                        "possible loss of science data"
-                    ),
+                    risk_if_skipped="Battery damage and sensor degradation",
                     priority=1,
                 ),
                 SuggestedAction.create(
@@ -387,16 +416,12 @@ def build_dscovr_rules() -> list[DetectionRule]:
                     ],
                     success_rate=0.887,
                     time_required_minutes=2.0,
-                    risk_if_skipped=(
-                        "May miss peak event; reduced situational awareness"
-                    ),
+                    risk_if_skipped="May miss peak event",
                     priority=2,
                 ),
                 SuggestedAction.create(
                     title="Continue nominal operations",
-                    description=(
-                        "Maintain current configuration and monitor."
-                    ),
+                    description="Maintain current configuration and monitor.",
                     steps=[
                         "Set alert threshold at 750 km/s",
                         "Notify standby operations team",
@@ -404,10 +429,7 @@ def build_dscovr_rules() -> list[DetectionRule]:
                     ],
                     success_rate=0.713,
                     time_required_minutes=0.0,
-                    risk_if_skipped=(
-                        "If CME stronger than predicted, "
-                        "recovery window may close"
-                    ),
+                    risk_if_skipped="Recovery window may close if CME stronger than predicted",
                     priority=3,
                 ),
             ],
@@ -415,7 +437,46 @@ def build_dscovr_rules() -> list[DetectionRule]:
             similar_events_count=847,
         ),
 
-        # Proton density anomaly
+        # Solar wind speed — critical CME
+        DetectionRule(
+            rule_id="dscovr-speed-critical",
+            name="Solar Wind Speed — Critical CME",
+            parameter_name="bulk_speed_km_s",
+            min_value=None,
+            max_value=800.0,
+            severity=AnomalySeverity.CRITICAL,
+            what_happened_template=(
+                "CRITICAL: Solar wind speed {observed:.0f} km/s exceeds "
+                "800 km/s CME threshold. Deviation: {deviation_pct:.1f}%. "
+                "Major geomagnetic storm likely within 30 minutes."
+            ),
+            why_it_matters=(
+                "Speed above 800 km/s indicates a major CME arrival. "
+                "Severe geomagnetic storm (G3-G5) is imminent. "
+                "Power grids, satellites, and HF radio are all at risk."
+            ),
+            suggested_actions=[
+                SuggestedAction.create(
+                    title="Activate emergency CME protocol",
+                    description="Full emergency response for major CME arrival.",
+                    steps=[
+                        "Immediately notify all spacecraft operators",
+                        "Switch all vulnerable assets to safe mode",
+                        "Alert power grid operators",
+                        "Activate backup communication links",
+                        "Document all actions in audit log",
+                    ],
+                    success_rate=0.870,
+                    time_required_minutes=5.0,
+                    risk_if_skipped="Severe spacecraft and infrastructure damage",
+                    priority=1,
+                ),
+            ],
+            urgency_hours=0.5,
+            similar_events_count=89,
+        ),
+
+        # Proton density
         DetectionRule(
             rule_id="dscovr-density-high",
             name="Proton Density — High",
@@ -424,15 +485,14 @@ def build_dscovr_rules() -> list[DetectionRule]:
             max_value=15.0,
             severity=AnomalySeverity.MEDIUM,
             what_happened_template=(
-                "Proton density reached {observed:.2f} protons/cm³, "
+                "Proton density reached {observed:.2f} p/cm³, "
                 "above the {max:.0f} p/cm³ nominal threshold. "
                 "Deviation: {deviation_pct:.1f}%."
             ),
             why_it_matters=(
-                "High proton density increases solar wind dynamic pressure. "
-                "This compresses the magnetosphere and can increase "
-                "radiation exposure for satellites in polar orbits. "
-                "GPS accuracy may degrade."
+                "High proton density increases solar wind dynamic pressure, "
+                "compressing the magnetosphere and increasing radiation "
+                "exposure for polar orbit satellites. GPS may degrade."
             ),
             suggested_actions=[
                 SuggestedAction.create(
@@ -445,10 +505,7 @@ def build_dscovr_rules() -> list[DetectionRule]:
                     ],
                     success_rate=0.921,
                     time_required_minutes=5.0,
-                    risk_if_skipped=(
-                        "Downstream operators may be unprepared "
-                        "for satellite anomalies"
-                    ),
+                    risk_if_skipped="Downstream operators unprepared for satellite anomalies",
                     priority=1,
                 ),
                 SuggestedAction.create(
@@ -468,7 +525,7 @@ def build_dscovr_rules() -> list[DetectionRule]:
             similar_events_count=1243,
         ),
 
-        # Magnetic field Bz southward anomaly
+        # Magnetic field Bz southward
         DetectionRule(
             rule_id="dscovr-bz-south",
             name="Magnetic Field Bz — Strong Southward",
@@ -477,30 +534,22 @@ def build_dscovr_rules() -> list[DetectionRule]:
             max_value=None,
             severity=AnomalySeverity.CRITICAL,
             what_happened_template=(
-                "Magnetic field Bz component reached {observed:.2f} nT "
-                "(strongly southward). Threshold: {min:.0f} nT. "
-                "Deviation: {deviation_pct:.1f}%."
+                "Magnetic field Bz reached {observed:.2f} nT (strongly southward). "
+                "Threshold: {min:.0f} nT. Deviation: {deviation_pct:.1f}%."
             ),
             why_it_matters=(
-                "Strong southward Bz is the primary driver of severe "
-                "geomagnetic storms. When Bz is strongly negative, "
-                "the solar wind magnetic field merges with Earth's field "
-                "and injects energy into the magnetosphere. "
-                "This can cause widespread satellite anomalies, "
-                "power grid disruptions, and HF radio blackouts. "
-                "This is the most operationally significant "
-                "solar wind parameter."
+                "Strong southward Bz is the primary driver of severe geomagnetic "
+                "storms. Solar wind merges with Earth's field injecting energy "
+                "into the magnetosphere. Can cause widespread satellite anomalies, "
+                "power grid disruptions, and HF radio blackouts."
             ),
             suggested_actions=[
                 SuggestedAction.create(
                     title="Issue G-storm warning immediately",
-                    description=(
-                        "Issue geomagnetic storm warning to all "
-                        "subscribed operators and agencies."
-                    ),
+                    description="Issue geomagnetic storm warning to all operators.",
                     steps=[
-                        "Confirm Bz reading with magnetic field backup",
-                        "Classify storm level (G1–G5 scale)",
+                        "Confirm Bz reading with backup sensor",
+                        "Classify storm level on G1-G5 scale",
                         "Issue warning via NOAA SWPC protocol",
                         "Notify airline operators — HF radio risk",
                         "Notify power grid operators — GIC risk",
@@ -508,11 +557,7 @@ def build_dscovr_rules() -> list[DetectionRule]:
                     ],
                     success_rate=0.967,
                     time_required_minutes=8.0,
-                    risk_if_skipped=(
-                        "Power grid damage, satellite loss, "
-                        "HF communication blackout, "
-                        "GPS degradation affecting aviation"
-                    ),
+                    risk_if_skipped="Power grid damage, satellite loss, HF blackout",
                     priority=1,
                 ),
                 SuggestedAction.create(
@@ -526,10 +571,7 @@ def build_dscovr_rules() -> list[DetectionRule]:
                     ],
                     success_rate=0.951,
                     time_required_minutes=15.0,
-                    risk_if_skipped=(
-                        "Electrostatic discharge risk, "
-                        "possible attitude control anomaly"
-                    ),
+                    risk_if_skipped="Electrostatic discharge risk",
                     priority=2,
                 ),
             ],
@@ -537,50 +579,81 @@ def build_dscovr_rules() -> list[DetectionRule]:
             similar_events_count=312,
         ),
 
-        # Ion temperature anomaly
+        # Magnetic field Bt extreme
         DetectionRule(
-            rule_id="dscovr-temp-extreme",
-            name="Ion Temperature — Extreme High",
-            parameter_name="ion_temperature_k",
+            rule_id="dscovr-bt-extreme",
+            name="Total Magnetic Field — Extreme",
+            parameter_name="bt_nt",
             min_value=None,
-            max_value=500_000.0,
-            severity=AnomalySeverity.MEDIUM,
+            max_value=50.0,
+            severity=AnomalySeverity.CRITICAL,
             what_happened_template=(
-                "Ion temperature reached {observed:,.0f} K, "
-                "above the {max:,.0f} K threshold. "
-                "Deviation: {deviation_pct:.1f}%."
+                "Total magnetic field Bt reached {observed:.1f} nT, "
+                "above the {max:.0f} nT extreme threshold. "
+                "Deviation: {deviation_pct:.1f}%. Major CME sheath."
             ),
             why_it_matters=(
-                "Extremely high ion temperature indicates a hot, "
-                "fast solar wind stream — typically associated with "
-                "coronal hole high-speed streams (HSS). "
-                "These streams can cause moderate geomagnetic activity "
-                "persisting for 2–4 days."
+                "Extreme total IMF strength indicates a highly compressed "
+                "solar wind — major CME sheath. Severe geomagnetic storm "
+                "is imminent. All spacecraft and infrastructure at risk."
             ),
             suggested_actions=[
                 SuggestedAction.create(
-                    title="Log HSS event and monitor",
-                    description=(
-                        "Record coronal hole high-speed stream event "
-                        "and increase monitoring frequency."
-                    ),
+                    title="Activate severe storm protocol",
+                    description="Extreme IMF compression — full emergency response.",
                     steps=[
-                        "Log HSS arrival in mission record",
-                        "Notify downstream space weather subscribers",
-                        "Set 4-hour monitoring review",
+                        "Immediately activate severe storm protocol",
+                        "Switch all spacecraft to emergency safe mode",
+                        "Notify national emergency management if G4+",
+                        "Document all actions immediately",
                     ],
-                    success_rate=0.893,
-                    time_required_minutes=3.0,
-                    risk_if_skipped="Missed documentation of recurring event",
+                    success_rate=0.850,
+                    time_required_minutes=5.0,
+                    risk_if_skipped="Severe damage to spacecraft and infrastructure",
                     priority=1,
                 ),
             ],
-            urgency_hours=8.0,
-            similar_events_count=2841,
+            urgency_hours=0.5,
+            similar_events_count=47,
+        ),
+
+        # Aviation altitude anomaly
+        DetectionRule(
+            rule_id="aviation-altitude-low",
+            name="Aircraft Low Altitude — Possible Emergency",
+            parameter_name="baro_altitude_m",
+            min_value=None,
+            max_value=1000.0,
+            severity=AnomalySeverity.HIGH,
+            what_happened_template=(
+                "Aircraft altitude {observed:.0f}m is below 1,000m threshold. "
+                "Deviation: {deviation_pct:.1f}%. "
+                "Verify aircraft is in planned approach phase."
+            ),
+            why_it_matters=(
+                "Aircraft below 1,000m outside of approach/departure phases "
+                "may indicate emergency descent or terrain proximity warning. "
+                "Requires immediate ATC verification."
+            ),
+            suggested_actions=[
+                SuggestedAction.create(
+                    title="Verify aircraft status with ATC",
+                    description="Confirm planned approach or declare emergency.",
+                    steps=[
+                        "Check flight plan for approach phase",
+                        "Contact ATC for aircraft status",
+                        "If unplanned — declare emergency and vector assistance",
+                    ],
+                    success_rate=0.950,
+                    time_required_minutes=2.0,
+                    risk_if_skipped="Possible CFIT or undetected emergency",
+                    priority=1,
+                ),
+            ],
+            urgency_hours=0.1,
+            similar_events_count=156,
         ),
     ]
-
-
 # ---------------------------------------------------------------------------
 # Main Detector
 # ---------------------------------------------------------------------------
