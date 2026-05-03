@@ -178,8 +178,82 @@ async def dashboard_data():
         "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
     }
 
+@dashboard_router.get("/map", response_class=HTMLResponse, tags=["Dashboard"])
+async def world_map():
+    return HTMLResponse(content=MAP_HTML)
+
+
+@dashboard_router.get("/map/data", tags=["Dashboard"])
+async def map_data():
+    global _sessions
+    controller = get_controller()
+
+    aircraft = []
+    spacecraft = []
+    satellites = []
+
+    for source, session_id in _sessions.items():
+        try:
+            session = controller.get_session(session_id)
+            if source == "opensky":
+                for pkt in session.packets:
+                    p = pkt.parameters
+                    if p.get("data_type") == "aircraft_state":
+                        lat = p.get("latitude_deg")
+                        lon = p.get("longitude_deg")
+                        if lat and lon:
+                            aircraft.append({
+                                "id": pkt.spacecraft_id,
+                                "callsign": p.get("callsign", "").strip(),
+                                "lat": lat,
+                                "lon": lon,
+                                "alt_m": p.get("baro_altitude_m", 0),
+                                "speed_ms": p.get("velocity_ms", 0),
+                                "track": p.get("true_track_deg", 0),
+                                "country": p.get("country", ""),
+                                "timestamp": pkt.timestamp.strftime("%H:%M:%S"),
+                            })
+            elif source in ("dscovr", "ace"):
+                label = "DSCOVR" if source == "dscovr" else "ACE"
+                spacecraft.append({
+                    "id": label,
+                    "name": f"{label} — L1 Lagrange Point",
+                    "lat": 0.0,
+                    "lon": -4.5 if source == "dscovr" else -4.8,
+                    "type": "spacecraft",
+                    "distance_km": 1_500_000,
+                    "packets": session.packet_count,
+                    "anomalies": session.anomaly_count,
+                    "description": "Solar wind monitor at L1, 1.5M km from Earth",
+                })
+            elif source == "celestrak":
+                for pkt in session.packets:
+                    p = pkt.parameters
+                    if p.get("data_type") == "orbital_elements":
+                        satellites.append({
+                            "id": pkt.spacecraft_id,
+                            "name": p.get("satellite_name", ""),
+                            "apogee_km": p.get("apogee_km", 0),
+                            "perigee_km": p.get("perigee_km", 0),
+                            "inclination_deg": p.get("inclination_deg", 0),
+                            "period_min": p.get("period_min", 0),
+                            "group": p.get("group", ""),
+                        })
+        except Exception:
+            continue
+
+    return {
+        "aircraft": aircraft[:100],
+        "spacecraft": spacecraft,
+        "satellites": satellites,
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "total_aircraft": len(aircraft),
+        "total_spacecraft": len(spacecraft),
+        "total_satellites": len(satellites),
+    }
 
 DASHBOARD_HTML = """<!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -587,6 +661,13 @@ footer {
 </head>
 <body>
 
+<div style="display:flex;gap:12px;align-items:center">
+    <a href="/map" style="color:#3a5a7a;font-size:10px;letter-spacing:1px;
+       text-decoration:none;padding:4px 10px;border:1px solid #1a2840;
+       border-radius:3px;" onmouseover="this.style.color='#4a9eff'"
+       onmouseout="this.style.color='#3a5a7a'">🗺 WORLD MAP</a>
+  </div>
+  
 <!-- HEADER -->
 <header>
   <div class="logo">CHRONO<em>SCOPE</em> AI</div>
@@ -1011,6 +1092,478 @@ setInterval(() => {
     log('Auto-refresh', '');
   }
 }, 30000);
+</script>
+</body>
+</html>
+"""
+MAP_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChronoScope AI — World Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --bg:#060810; --bg2:#0a0d18; --border:#1a2840;
+  --blue:#4a9eff; --cyan:#00d4aa; --green:#00ff88;
+  --yellow:#ffcc00; --red:#ff3355; --dim:#3a5a7a; --text:#c0d4e8;
+}
+body { background:var(--bg); color:var(--text); font-family:'Courier New',monospace; }
+
+header {
+  background:var(--bg2); border-bottom:1px solid var(--border);
+  padding:0 20px; height:48px; display:flex;
+  align-items:center; justify-content:space-between;
+}
+.logo { font-size:16px; font-weight:bold; letter-spacing:3px; color:var(--blue); }
+.logo em { color:var(--cyan); font-style:normal; }
+
+.nav { display:flex; gap:16px; align-items:center; }
+.nav a {
+  color:var(--dim); font-size:10px; letter-spacing:1px;
+  text-decoration:none; padding:4px 10px; border:1px solid var(--border);
+  border-radius:3px;
+}
+.nav a:hover { color:var(--blue); border-color:var(--blue); }
+.nav a.active { color:var(--cyan); border-color:var(--cyan); }
+
+.controls {
+  background:var(--bg2); border-bottom:1px solid var(--border);
+  padding:8px 20px; display:flex; gap:12px; align-items:center;
+  flex-wrap:wrap;
+}
+.ctrl-btn {
+  background:var(--bg); border:1px solid var(--border);
+  color:var(--text); padding:5px 12px; border-radius:3px;
+  font-family:'Courier New',monospace; font-size:10px;
+  cursor:pointer; letter-spacing:1px; transition:all 0.15s;
+}
+.ctrl-btn:hover { border-color:var(--blue); color:var(--blue); }
+.ctrl-btn.active { border-color:var(--cyan); color:var(--cyan); }
+
+.stats-bar {
+  display:flex; gap:24px; margin-left:auto; font-size:10px;
+}
+.stat { color:var(--dim); }
+.stat span { color:var(--cyan); font-weight:bold; }
+
+#map {
+  height: calc(100vh - 120px);
+  background: #0a0d18;
+}
+
+/* Leaflet dark overrides */
+.leaflet-container { background:#060810; }
+.leaflet-tile { filter: brightness(0.4) saturate(0.3) hue-rotate(180deg); }
+
+.leaflet-popup-content-wrapper {
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:4px; color:var(--text); font-family:'Courier New',monospace;
+}
+.leaflet-popup-tip { background:var(--bg2); }
+.leaflet-popup-content { margin:10px 14px; font-size:11px; line-height:1.8; }
+.popup-title { color:var(--cyan); font-weight:bold; font-size:12px; margin-bottom:6px; }
+.popup-row { display:flex; justify-content:space-between; gap:16px; }
+.popup-label { color:var(--dim); }
+.popup-val { color:var(--text); }
+.popup-alert { color:var(--yellow); margin-top:6px; }
+.popup-critical { color:var(--red); }
+
+.aircraft-icon { font-size:16px; }
+.spacecraft-icon { font-size:20px; }
+
+/* Legend */
+.legend {
+  position:absolute; bottom:20px; right:20px; z-index:1000;
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:4px; padding:12px 16px; font-size:10px;
+}
+.legend-title {
+  color:var(--dim); letter-spacing:2px; margin-bottom:8px;
+  font-size:9px; text-transform:uppercase;
+}
+.legend-item { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+.legend-dot {
+  width:10px; height:10px; border-radius:50%;
+  flex-shrink:0;
+}
+
+/* Info panel */
+#info-panel {
+  position:absolute; top:120px; right:0; z-index:1000;
+  background:var(--bg2); border-left:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+  width:280px; padding:14px; font-size:11px;
+  max-height:calc(100vh - 120px); overflow-y:auto;
+  display:none;
+}
+#info-panel.visible { display:block; }
+.info-title { color:var(--cyan); font-size:12px; font-weight:bold; margin-bottom:10px; }
+.info-row { display:flex; justify-content:space-between; padding:4px 0;
+  border-bottom:1px solid var(--border); }
+.info-lbl { color:var(--dim); }
+.info-val { color:var(--text); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">CHRONO<em>SCOPE</em> AI</div>
+  <div class="nav">
+    <a href="/dashboard">DASHBOARD</a>
+    <a href="/map" class="active">WORLD MAP</a>
+    <a href="/docs">API DOCS</a>
+  </div>
+</header>
+
+<div class="controls">
+  <button class="ctrl-btn active" id="btn-aircraft" onclick="toggleLayer('aircraft')">
+    ✈ AIRCRAFT <span id="cnt-aircraft">0</span>
+  </button>
+  <button class="ctrl-btn active" id="btn-spacecraft" onclick="toggleLayer('spacecraft')">
+    🛸 SPACECRAFT <span id="cnt-spacecraft">0</span>
+  </button>
+  <button class="ctrl-btn active" id="btn-satellites" onclick="toggleLayer('satellites')">
+    🛰 SATELLITES <span id="cnt-satellites">0</span>
+  </button>
+  <button class="ctrl-btn" onclick="refreshMap()" id="refresh-btn">↺ REFRESH</button>
+  <span style="font-size:9px;color:var(--dim)" id="last-update">No data loaded</span>
+
+  <div class="stats-bar">
+    <div class="stat">Aircraft: <span id="s-aircraft">—</span></div>
+    <div class="stat">Spacecraft: <span id="s-spacecraft">—</span></div>
+    <div class="stat">Satellites: <span id="s-satellites">—</span></div>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<div class="legend">
+  <div class="legend-title">Legend</div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#4a9eff"></div>
+    <span>Aircraft (live)</span>
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#00d4aa"></div>
+    <span>Spacecraft (L1)</span>
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#ffcc00"></div>
+    <span>Satellites (orbital)</span>
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#ff3355"></div>
+    <span>Anomaly detected</span>
+  </div>
+</div>
+
+<div id="info-panel">
+  <div class="info-title" id="info-title">Asset Details</div>
+  <div id="info-content"></div>
+</div>
+
+<script>
+// ── Map init ───────────────────────────────────────────────────────
+const map = L.map('map', {
+  center: [20, -30],
+  zoom: 2,
+  zoomControl: true,
+  attributionControl: false,
+});
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 18,
+  opacity: 0.4,
+}).addTo(map);
+
+// ── Layer groups ───────────────────────────────────────────────────
+const layers = {
+  aircraft:   L.layerGroup().addTo(map),
+  spacecraft: L.layerGroup().addTo(map),
+  satellites: L.layerGroup().addTo(map),
+};
+
+const layerVisible = { aircraft: true, spacecraft: true, satellites: true };
+
+function toggleLayer(name) {
+  layerVisible[name] = !layerVisible[name];
+  const btn = document.getElementById('btn-' + name);
+  if (layerVisible[name]) {
+    map.addLayer(layers[name]);
+    btn.classList.add('active');
+  } else {
+    map.removeLayer(layers[name]);
+    btn.classList.remove('active');
+  }
+}
+
+// ── Icon helpers ───────────────────────────────────────────────────
+function aircraftIcon(track, hasAnomaly) {
+  const color = hasAnomaly ? '#ff3355' : '#4a9eff';
+  const rot = track || 0;
+  return L.divIcon({
+    html: `<div style="
+      transform:rotate(${rot}deg);
+      font-size:14px;
+      color:${color};
+      text-shadow:0 0 4px ${color};
+      line-height:1;
+    ">✈</div>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+    className: '',
+  });
+}
+
+function spacecraftIcon() {
+  return L.divIcon({
+    html: `<div style="
+      font-size:22px;
+      text-shadow:0 0 8px #00d4aa;
+      line-height:1;
+    ">🛸</div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+    className: '',
+  });
+}
+
+function satelliteIcon() {
+  return L.divIcon({
+    html: `<div style="
+      font-size:18px;
+      text-shadow:0 0 6px #ffcc00;
+      line-height:1;
+    ">🛰</div>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+    className: '',
+  });
+}
+
+// ── Render ─────────────────────────────────────────────────────────
+function renderMap(d) {
+  layers.aircraft.clearLayers();
+  layers.spacecraft.clearLayers();
+  layers.satellites.clearLayers();
+
+  // Aircraft
+  let aircraftWithAnomaly = 0;
+  for (const a of d.aircraft) {
+    const hasAnomaly = a.alt_m > 0 && a.alt_m < 1000;
+    if (hasAnomaly) aircraftWithAnomaly++;
+
+    const marker = L.marker([a.lat, a.lon], {
+      icon: aircraftIcon(a.track, hasAnomaly),
+    });
+
+    const altFt = (a.alt_m * 3.28084).toFixed(0);
+    const speedKts = (a.speed_ms * 1.94384).toFixed(0);
+
+    marker.bindPopup(`
+      <div class="popup-title">✈ ${a.callsign || a.id}</div>
+      <div class="popup-row">
+        <span class="popup-label">Country</span>
+        <span class="popup-val">${a.country}</span>
+      </div>
+      <div class="popup-row">
+        <span class="popup-label">Altitude</span>
+        <span class="popup-val">${a.alt_m.toFixed(0)}m / ${altFt}ft</span>
+      </div>
+      <div class="popup-row">
+        <span class="popup-label">Speed</span>
+        <span class="popup-val">${a.speed_ms.toFixed(0)} m/s / ${speedKts} kts</span>
+      </div>
+      <div class="popup-row">
+        <span class="popup-label">Track</span>
+        <span class="popup-val">${a.track.toFixed(0)}°</span>
+      </div>
+      <div class="popup-row">
+        <span class="popup-label">Position</span>
+        <span class="popup-val">${a.lat.toFixed(3)}°, ${a.lon.toFixed(3)}°</span>
+      </div>
+      <div class="popup-row">
+        <span class="popup-label">Updated</span>
+        <span class="popup-val">${a.timestamp}</span>
+      </div>
+      ${hasAnomaly ? '<div class="popup-critical">⚠ LOW ALTITUDE ANOMALY FLAGGED</div>' : ''}
+    `);
+
+    marker.on('click', () => showInfo('aircraft', a));
+    layers.aircraft.addLayer(marker);
+  }
+
+  // Spacecraft — shown near L1 point indicator on map edge
+  for (const sc of d.spacecraft) {
+    // Place near Canary Islands area as L1 proxy on flat map
+    const lat = sc.id === 'DSCOVR' ? 28.0 : 27.0;
+    const lon = sc.id === 'DSCOVR' ? -15.0 : -16.0;
+
+    const marker = L.marker([lat, lon], { icon: spacecraftIcon() });
+    marker.bindPopup(`
+      <div class="popup-title">🛸 ${sc.name}</div>
+      <div class="popup-row">
+        <span class="popup-label">Location</span>
+        <span class="popup-val">L1 Lagrange Point</span>
+      </div>
+      <div class="popup-row">
+        <span class="popup-label">Distance</span>
+        <span class="popup-val">1,500,000 km from Earth</span>
+      </div>
+      <div class="popup-row">
+        <span class="popup-label">Packets</span>
+        <span class="popup-val">${sc.packets.toLocaleString()}</span>
+      </div>
+      <div class="popup-row">
+        <span class="popup-label">Anomalies</span>
+        <span class="popup-val ${sc.anomalies > 0 ? 'popup-alert' : ''}">${sc.anomalies}</span>
+      </div>
+      <div class="popup-row">
+        <span class="popup-label">Mission</span>
+        <span class="popup-val">Solar wind monitor</span>
+      </div>
+    `);
+    marker.on('click', () => showInfo('spacecraft', sc));
+    layers.spacecraft.addLayer(marker);
+  }
+
+  // Draw L1 indicator line
+  if (d.spacecraft.length > 0) {
+    const l1Circle = L.circle([27.5, -15.5], {
+      radius: 300000,
+      color: '#00d4aa',
+      fillColor: '#00d4aa',
+      fillOpacity: 0.03,
+      weight: 1,
+      dashArray: '4 8',
+    });
+    layers.spacecraft.addLayer(l1Circle);
+
+    const l1Label = L.marker([31.0, -15.5], {
+      icon: L.divIcon({
+        html: '<div style="color:#00d4aa;font-size:9px;letter-spacing:1px;white-space:nowrap">L1 LAGRANGE POINT</div>',
+        className: '',
+        iconAnchor: [60, 0],
+      })
+    });
+    layers.spacecraft.addLayer(l1Label);
+  }
+
+  // Satellites — show as orbital info panel items
+  for (let i = 0; i < d.satellites.length; i++) {
+    const sat = d.satellites[i];
+    // Place along ISS-like ground track
+    const lat = Math.sin(i * 1.1) * 51.6;
+    const lon = (i * 40 - 180) % 360;
+    const marker = L.marker([lat, lon], { icon: satelliteIcon() });
+    marker.bindPopup(`
+      <div class="popup-title">🛰 ${sat.name}</div>
+      <div class="popup-row">
+        <span class="popup-label">Apogee</span>
+        <span class="popup-val">${sat.apogee_km} km</span>
+      </div>
+      <div class="popup-row">
+        <span class="popup-label">Perigee</span>
+        <span class="popup-val">${sat.perigee_km} km</span>
+      </div>
+      <div class="popup-row">
+        <span class="popup-label">Inclination</span>
+        <span class="popup-val">${sat.inclination_deg}°</span>
+      </div>
+      <div class="popup-row">
+        <span class="popup-label">Period</span>
+        <span class="popup-val">${sat.period_min} min</span>
+      </div>
+      <div class="popup-row">
+        <span class="popup-label">Group</span>
+        <span class="popup-val">${sat.group}</span>
+      </div>
+    `);
+    marker.on('click', () => showInfo('satellite', sat));
+    layers.satellites.addLayer(marker);
+  }
+
+  // Update counts
+  document.getElementById('cnt-aircraft').textContent = d.aircraft.length;
+  document.getElementById('cnt-spacecraft').textContent = d.spacecraft.length;
+  document.getElementById('cnt-satellites').textContent = d.satellites.length;
+  document.getElementById('s-aircraft').textContent = d.total_aircraft;
+  document.getElementById('s-spacecraft').textContent = d.total_spacecraft;
+  document.getElementById('s-satellites').textContent = d.total_satellites;
+  document.getElementById('last-update').textContent =
+    'Updated: ' + d.timestamp.split(' ')[1] + ' UTC';
+}
+
+function showInfo(type, data) {
+  const panel = document.getElementById('info-panel');
+  const title = document.getElementById('info-title');
+  const content = document.getElementById('info-content');
+
+  panel.classList.add('visible');
+
+  if (type === 'aircraft') {
+    title.textContent = '✈ ' + (data.callsign || data.id);
+    content.innerHTML = `
+      <div class="info-row"><span class="info-lbl">ID</span><span class="info-val">${data.id}</span></div>
+      <div class="info-row"><span class="info-lbl">Country</span><span class="info-val">${data.country}</span></div>
+      <div class="info-row"><span class="info-lbl">Altitude</span><span class="info-val">${data.alt_m.toFixed(0)} m</span></div>
+      <div class="info-row"><span class="info-lbl">Speed</span><span class="info-val">${data.speed_ms.toFixed(0)} m/s</span></div>
+      <div class="info-row"><span class="info-lbl">Track</span><span class="info-val">${data.track.toFixed(0)}°</span></div>
+      <div class="info-row"><span class="info-lbl">Lat/Lon</span><span class="info-val">${data.lat.toFixed(3)}, ${data.lon.toFixed(3)}</span></div>
+      <div class="info-row"><span class="info-lbl">Updated</span><span class="info-val">${data.timestamp}</span></div>
+      ${data.alt_m < 1000 && data.alt_m > 0 ?
+        '<div style="color:#ff3355;margin-top:8px">⚠ LOW ALTITUDE FLAG</div>' : ''}
+    `;
+  } else if (type === 'spacecraft') {
+    title.textContent = '🛸 ' + data.id;
+    content.innerHTML = `
+      <div class="info-row"><span class="info-lbl">Location</span><span class="info-val">L1 Point</span></div>
+      <div class="info-row"><span class="info-lbl">Distance</span><span class="info-val">1.5M km</span></div>
+      <div class="info-row"><span class="info-lbl">Packets</span><span class="info-val">${data.packets.toLocaleString()}</span></div>
+      <div class="info-row"><span class="info-lbl">Anomalies</span><span class="info-val">${data.anomalies}</span></div>
+      <div class="info-row"><span class="info-lbl">Mission</span><span class="info-val">Solar wind</span></div>
+    `;
+  } else {
+    title.textContent = '🛰 ' + data.name;
+    content.innerHTML = `
+      <div class="info-row"><span class="info-lbl">Apogee</span><span class="info-val">${data.apogee_km} km</span></div>
+      <div class="info-row"><span class="info-lbl">Perigee</span><span class="info-val">${data.perigee_km} km</span></div>
+      <div class="info-row"><span class="info-lbl">Inclination</span><span class="info-val">${data.inclination_deg}°</span></div>
+      <div class="info-row"><span class="info-lbl">Period</span><span class="info-val">${data.period_min} min</span></div>
+    `;
+  }
+}
+
+// Close info panel on map click
+map.on('click', () => {
+  document.getElementById('info-panel').classList.remove('visible');
+});
+
+// ── Load data ──────────────────────────────────────────────────────
+async function refreshMap() {
+  document.getElementById('refresh-btn').textContent = '⟳ LOADING';
+  try {
+    const res = await fetch('/map/data');
+    const d = await res.json();
+    renderMap(d);
+    document.getElementById('refresh-btn').textContent = '↺ REFRESH';
+  } catch(e) {
+    document.getElementById('refresh-btn').textContent = '✗ ERROR';
+    setTimeout(() => {
+      document.getElementById('refresh-btn').textContent = '↺ REFRESH';
+    }, 2000);
+  }
+}
+
+// Auto refresh every 60 seconds
+setInterval(refreshMap, 60000);
+
+// Load on open
+refreshMap();
 </script>
 </body>
 </html>

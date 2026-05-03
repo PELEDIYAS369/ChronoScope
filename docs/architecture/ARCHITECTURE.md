@@ -5,6 +5,16 @@
 **Data:** Tested on real NASA/NOAA DSCOVR spacecraft telemetry
 
 ---
+# ChronoScope AI — System Architecture
+
+**Version:** 1.0.0  
+**Tests:** 246 passing  
+**Data Sources:** DSCOVR, ACE, OpenSky, CelesTrak  
+**Dashboard:** http://localhost:8000/dashboard  
+**World Map:** http://localhost:8000/map  
+**API Docs:** http://localhost:8000/docs  
+
+---
 
 ## What ChronoScope AI Does
 

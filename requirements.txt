@@ -1,28 +1,40 @@
-# Core
-numpy==2.2.1
-pandas==2.2.3
-scipy==1.15.1
-
-# Telemetry parsing
-construct==2.10.68
+annotated-types==0.7.0
+anyio==4.13.0
+bitarray==2.9.3
 bitstring==4.1.4
-
-# API layer
+certifi==2026.4.22
+cffi==2.0.0
+charset-normalizer==3.4.7
+click==8.3.3
+colorama==0.4.6
+construct==2.10.68
+coverage==7.13.5
+cryptography==44.0.0
 fastapi==0.115.6
-uvicorn==0.34.0
+h11==0.16.0
+h5py==3.12.1
+httpcore==1.0.9
+httpx==0.28.1
+idna==3.13
+iniconfig==2.3.0
+numpy==2.2.1
+packaging==26.2
+pandas==2.2.3
+pluggy==1.6.0
+pycparser==3.0
 pydantic==2.10.4
-
-# Testing
+pydantic_core==2.27.2
 pytest==8.3.4
 pytest-cov==6.0.0
-httpx==0.28.1
-
-# Observability
-structlog==24.4.0
-
-# Security
-cryptography==44.0.0
-
-# Data formats
-h5py==3.12.1
+python-dateutil==2.9.0.post0
+python-multipart==0.0.27
+pytz==2026.1.post1
 requests==2.32.3
+scipy==1.15.1
+six==1.17.0
+starlette==0.41.3
+structlog==24.4.0
+typing_extensions==4.15.0
+tzdata==2026.2
+urllib3==2.6.3
+uvicorn==0.34.0
