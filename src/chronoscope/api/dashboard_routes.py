@@ -661,13 +661,15 @@ footer {
 </head>
 <body>
 
-<div style="display:flex;gap:12px;align-items:center">
-    <a href="/map" style="color:#3a5a7a;font-size:10px;letter-spacing:1px;
-       text-decoration:none;padding:4px 10px;border:1px solid #1a2840;
-       border-radius:3px;" onmouseover="this.style.color='#4a9eff'"
-       onmouseout="this.style.color='#3a5a7a'">🗺 WORLD MAP</a>
-  </div>
-  
+<div style="display:flex;gap:80px;align-items:center">
+  <a href="/map" style="color:#3a5a7a;font-size:10px;letter-spacing:1px;
+     text-decoration:none;padding:4px 10px;border:1px solid #1a2840;
+     border-radius:3px;">🗺 MAP</a>
+  <a href="/globe" style="color:#3a5a7a;font-size:10px;letter-spacing:1px;
+     text-decoration:none;padding:4px 10px;border:1px solid #1a2840;
+     border-radius:3px;">🌍 3D GLOBE</a>
+</div>
+
 <!-- HEADER -->
 <header>
   <div class="logo">CHRONO<em>SCOPE</em> AI</div>

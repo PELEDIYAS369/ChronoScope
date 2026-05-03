@@ -4,6 +4,7 @@ The main ASGI application entry point.
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from src.chronoscope.api.globe_routes import globe_router
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from src.chronoscope.api.routes import router
@@ -32,6 +33,7 @@ app.add_middleware(
 
 app.include_router(router, prefix="/api/v1")
 app.include_router(dashboard_router)
+app.include_router(globe_router)
 
 
 @app.get("/", tags=["Root"])
@@ -42,4 +44,6 @@ async def root():
         "docs": "/docs",
         "health": "/api/v1/health",
         "dashboard": "/dashboard",
+        "globe": "/globe",
+
     }
