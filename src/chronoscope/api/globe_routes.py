@@ -109,7 +109,7 @@ header {
 .nav a:hover { color:var(--blue); border-color:var(--blue); }
 .nav a.active { color:var(--cyan); border-color:var(--cyan); }
 
-#canvas { position:fixed; top:44px; left:0; right:0; bottom:0; }
+#canvas { position:fixed; top:44px; left:0; width:100vw; height:calc(100vh - 44px); display:block; }
 
 /* HUD overlays */
 .hud {
@@ -285,8 +285,10 @@ const LAYERS = {
 
 function init() {
   const canvas = document.getElementById('canvas');
-  const W = canvas.clientWidth || window.innerWidth;
-  const H = canvas.clientHeight || window.innerHeight - 44;
+  const W = window.innerWidth;
+  const H = window.innerHeight - 44;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
 
   // Scene
   scene = new THREE.Scene();
@@ -307,8 +309,10 @@ function init() {
   setupEvents(canvas);
 
   window.addEventListener('resize', () => {
-    const W2 = canvas.clientWidth || window.innerWidth;
-    const H2 = canvas.clientHeight || window.innerHeight - 44;
+    const W2 = window.innerWidth;
+    const H2 = window.innerHeight - 44;
+    canvas.style.width = W2 + 'px';
+    canvas.style.height = H2 + 'px';
     camera.aspect = W2 / H2;
     camera.updateProjectionMatrix();
     renderer.setSize(W2, H2);
