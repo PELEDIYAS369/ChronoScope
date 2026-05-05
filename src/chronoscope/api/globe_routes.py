@@ -389,56 +389,85 @@ function buildScene() {
     solarGroup.add(ring);
   }
 
-  // ── Earth ─────────────────────────────────────────────────────
+ // ── Earth ─────────────────────────────────────────────────────
   const earthGeo = new THREE.SphereGeometry(1, 64, 64);
 
-  // Earth material — blue ocean, green land look
-  const earthCanvas = document.createElement('canvas');
-  earthCanvas.width = 512; earthCanvas.height = 256;
-  const ctx = earthCanvas.getContext('2d');
+  // Load NASA Blue Marble texture
+  const textureLoader = new THREE.TextureLoader();
+  const earthTex = textureLoader.load(
+    'https://eoimages.gsfc.nasa.gov/images/imagerecords/74000/74117/world.200408.3x5400x2700.jpg',
+    () => { renderer.render(scene, camera); },
+    undefined,
+    () => {
+      // Fallback if NASA texture fails — use canvas texture
+      const fc = document.createElement('canvas');
+      fc.width = 512; fc.height = 256;
+      const fctx = fc.getContext('2d');
+      const grad = fctx.createLinearGradient(0,0,0,256);
+      grad.addColorStop(0,'#0a1628');
+      grad.addColorStop(0.5,'#0d2040');
+      grad.addColorStop(1,'#0a1628');
+      fctx.fillStyle = grad;
+      fctx.fillRect(0,0,512,256);
+      fctx.fillStyle = '#1a3a1a';
+      fctx.fillRect(60,40,90,100);
+      fctx.fillRect(100,150,50,80);
+      fctx.fillRect(220,30,50,60);
+      fctx.fillRect(220,90,60,110);
+      fctx.fillRect(270,20,150,100);
+      fctx.fillRect(360,150,70,50);
+      earthMesh.material.map = new THREE.CanvasTexture(fc);
+      earthMesh.material.needsUpdate = true;
+    }
+  );
 
-  // Ocean
-  const grad = ctx.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0, '#0a1628');
-  grad.addColorStop(0.5, '#0d2040');
-  grad.addColorStop(1, '#0a1628');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 512, 256);
+  // Night lights texture (city lights on dark side)
+  const nightTex = textureLoader.load(
+    'https://eoimages.gsfc.nasa.gov/images/imagerecords/79000/79765/dnb_land_ocean_ice.2012.3600x1800.jpg'
+  );
 
-  // Simple continent shapes
-  ctx.fillStyle = '#1a3a1a';
-  // North America
-  ctx.fillRect(60, 40, 90, 100);
-  // South America
-  ctx.fillRect(100, 150, 50, 80);
-  // Europe
-  ctx.fillRect(220, 30, 50, 60);
-  // Africa
-  ctx.fillRect(220, 90, 60, 110);
-  // Asia
-  ctx.fillRect(270, 20, 150, 100);
-  // Australia
-  ctx.fillRect(360, 150, 70, 50);
+  // Cloud texture
+  const cloudTex = textureLoader.load(
+    'https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57747/cloud_combined_2048.jpg'
+  );
 
-  const earthTex = new THREE.CanvasTexture(earthCanvas);
   const earthMat = new THREE.MeshPhongMaterial({
     map: earthTex,
-    specular: new THREE.Color(0x2244aa),
-    shininess: 30,
+    specularMap: nightTex,
+    specular: new THREE.Color(0x111133),
+    shininess: 15,
   });
   earthMesh = new THREE.Mesh(earthGeo, earthMat);
   scene.add(earthMesh);
 
+  // Cloud layer
+  const cloudGeo = new THREE.SphereGeometry(1.005, 64, 64);
+  const cloudMat = new THREE.MeshPhongMaterial({
+    map: cloudTex,
+    transparent: true,
+    opacity: 0.35,
+    depthWrite: false,
+  });
+  const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
+  scene.add(cloudMesh);
+
+  // Slowly rotate clouds independently
+  function animateClouds() {
+    requestAnimationFrame(animateClouds);
+    cloudMesh.rotation.y += 0.00018;
+  }
+  animateClouds();
+
   // Grid lines on Earth
   const gridMat = new THREE.MeshBasicMaterial({
     color: 0x1a3a6a, wireframe: true,
-    transparent: true, opacity: 0.08,
+    transparent: true, opacity: 0.04,
   });
   const gridMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(1.001, 24, 12), gridMat
+    new THREE.SphereGeometry(1.002, 24, 12), gridMat
   );
   scene.add(gridMesh);
-
+  
   // ── Atmosphere ─────────────────────────────────────────────────
   const atmGeo = new THREE.SphereGeometry(1.12, 64, 64);
   const atmMat = new THREE.MeshBasicMaterial({
