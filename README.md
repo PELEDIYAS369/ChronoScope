@@ -1,5 +1,11 @@
 # ChronoScope AI
 
+![Tests](https://img.shields.io/badge/tests-246%20passing-brightgreen)
+![Python](https://img.shields.io/badge/python-3.13-blue)
+![Data](https://img.shields.io/badge/data-live%20NASA-orange)
+![Status](https://img.shields.io/badge/status-active-success)
+![Location](https://img.shields.io/badge/built%20in-Toronto%20Canada-red)
+
 **Universal telemetry replay, audit, and anomaly detection platform.**
 
 Built for space operations. Designed for any complex system.
