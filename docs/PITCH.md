@@ -178,7 +178,7 @@ At 36x ROI nobody argues about the price.
 ## Team
 
 Founded in Toronto, Ontario, Canada.
-Incorporated under Ontario Business Corporations Act.
+Incorporated under Ontario Business Corporations Act.(working on it)
 IP owned entirely by ChronoScope AI Inc.
 
 ---
