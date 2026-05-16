@@ -9,7 +9,7 @@ click==8.3.3
 colorama==0.4.6
 construct==2.10.68
 coverage==7.13.5
-cryptography==44.0.0
+cryptography==46.0.7
 fastapi==0.115.6
 h11==0.16.0
 h5py==3.12.1
