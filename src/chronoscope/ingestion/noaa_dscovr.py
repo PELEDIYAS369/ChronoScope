@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Utsav Sojitra. All rights reserved.
+# ChronoScope AI — Proprietary and Confidential
+# Unauthorized use, copying, or distribution is strictly prohibited.
+
 """
 ChronoScope AI — NOAA DSCOVR Solar Wind Ingester
 Pulls real solar wind telemetry from NOAA's public API.

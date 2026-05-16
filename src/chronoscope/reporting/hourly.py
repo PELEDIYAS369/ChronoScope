@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Utsav Sojitra. All rights reserved.
+# ChronoScope AI — Proprietary and Confidential
+# Unauthorized use, copying, or distribution is strictly prohibited.
+
 """
 ChronoScope AI — Hourly Operational Report Generator
 Event-driven. Generates both human-readable and machine-readable reports.

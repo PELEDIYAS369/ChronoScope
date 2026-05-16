@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Utsav Sojitra. All rights reserved.
+# ChronoScope AI — Proprietary and Confidential
+# Unauthorized use, copying, or distribution is strictly prohibited.
+
 from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone

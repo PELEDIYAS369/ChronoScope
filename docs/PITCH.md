@@ -239,6 +239,6 @@ IP owned entirely by ChronoScope AI Inc.
 
 ChronoScope AI Inc.
 Toronto, Ontario, Canada
-utsav.sojitra@gmail.com
+chroonoscope.ai@gmail.com
 
 *"The first time you need it, you'll wish you had it sooner."*

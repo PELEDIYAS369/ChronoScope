@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Utsav Sojitra. All rights reserved.
+# ChronoScope AI — Proprietary and Confidential
+# Unauthorized use, copying, or distribution is strictly prohibited.
+
 """
 ChronoScope AI — Replay Engine
 The core of ChronoScope. This is what makes it unique.
