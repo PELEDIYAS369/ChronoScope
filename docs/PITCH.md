@@ -117,7 +117,7 @@ No current tool owns all of these simultaneously:
 
 ---
 
-## Business Model(future plans)
+## Business Model
 
 **SaaS Licensing (Ground Operations)**
 $150,000 – $500,000 per year per operations center
