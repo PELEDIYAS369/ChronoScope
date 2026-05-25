@@ -1,21 +1,33 @@
 # Security Policy
 
-## Supported Versions
-
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
-
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
-
 ## Reporting a Vulnerability
 
-Use this section to tell people how to report a vulnerability.
+If you discover a security vulnerability in ChronoScope, please report it responsibly.
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+**Email:** chronoscope.ai@gmail.com
+
+**Please include:**
+- Description of the vulnerability
+- Steps to reproduce
+- Potential impact
+
+We will acknowledge receipt within 48 hours and provide an initial assessment within 7 days.
+
+## Scope
+
+ChronoScope's security-relevant components include:
+
+- **Cryptographic audit chain** — SHA-256 chaining of all audit entries
+- **API authentication** — Token-based access control
+- **Data integrity** — Immutable telemetry packet design
+- **Input validation** — All ingested data validated against domain contracts
+
+## Supported Versions
+
+| Version | Supported |
+|---|---|
+| 1.x (current) | ✅ Yes |
+
+## Disclosure Policy
+
+We ask that you do not publicly disclose a vulnerability until we have had a reasonable opportunity to address it.

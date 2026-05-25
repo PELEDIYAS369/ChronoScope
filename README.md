@@ -1,187 +1,176 @@
-# ChronoScope AI
+# ChronoScope
 
-![Tests](https://img.shields.io/badge/tests-246%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-334%20passing-brightgreen)
 ![Python](https://img.shields.io/badge/python-3.13-blue)
-![Data](https://img.shields.io/badge/data-live%20NASA-orange)
-![Status](https://img.shields.io/badge/status-active-success)
-![Location](https://img.shields.io/badge/built%20in-Toronto%20Canada-red)
+![Data](https://img.shields.io/badge/data-live%20NOAA%20DSCOVR-orange)
+![License](https://img.shields.io/badge/license-proprietary-red)
 
-**Universal telemetry replay, audit, and anomaly detection platform.**
+**Telemetry replay, audit, and anomaly detection for mission-critical operations.**
 
-Built for space operations. Designed for any complex system.
+Built for space ground operations. Designed to extend to aviation, maritime, and industrial systems.
+
+---
+
+## The Problem
+
+When something goes wrong in a complex mission, operations teams spend
+**days to weeks** manually reconstructing what happened — digging through
+CSV exports, scattered logs, shift notes, and emails.
+
+Investigation is slow because the tools are fragmented:
+
+| Today's Workflow | With ChronoScope |
+|---|---|
+| Manual CSV reconstruction | Deterministic session replay |
+| Scattered, mutable logs | Cryptographic audit chain |
+| Threshold alarms only | Statistical anomaly detection with explainable output |
+| 4–5 disconnected tools | Single integrated platform |
+| 7–14 days to investigate | Hours to investigate |
 
 ---
 
 ## What It Does
 
-ChronoScope AI is the first unified platform that lets any operations
-team:
+ChronoScope is a platform that lets operations teams:
 
-1. **Replay** any past mission moment with perfect, deterministic fidelity
-2. **Audit** every decision with a tamper-evident cryptographic chain
-3. **Detect** anomalies before they become failures using explainable AI
-4. **Report** complete mission summaries in JSON and Markdown instantly
-
----
-
-## The Problem It Solves
-
-When something goes wrong in a complex mission, operations teams spend
-**days to weeks** manually reconstructing what happened — digging through
-CSV files, scattered logs, shift notes, and emails.
-
-ChronoScope reduces that to **hours**.
-
-| Without ChronoScope | With ChronoScope |
-|---------------------|-----------------|
-| Manual CSV investigation | Deterministic replay |
-| Scattered audit logs | Cryptographic chain |
-| Rule-based alarms only | AI with explainable output |
-| Fragmented tools | Single unified platform |
-| Days to investigate | Hours to investigate |
+1. **Replay** any past mission moment with deterministic fidelity — same input always produces identical output, verified via SHA-256 session fingerprinting
+2. **Audit** every operator action through a tamper-evident cryptographic chain — modifying or deleting any entry breaks the chain and is mathematically detectable
+3. **Detect** anomalies using statistical analysis (z-score deviation, pattern matching, temporal correlation) with mandatory human-readable explanations for every flag
+4. **Report** investigation summaries in structured JSON and Markdown
 
 ---
 
-## Live Demo Output
+## Live Validation
 
-Running on real NOAA DSCOVR spacecraft data (L1 Lagrange Point,
-1.5 million km from Earth):
+Running on real NOAA DSCOVR spacecraft telemetry (L1 Lagrange point, 1.5 million km from Earth):
 
-Let's go. Starting with the README and pitch document.
-
-FILE 1 of 2 — README.md
-Replace your entire README.md with this:
-markdown# ChronoScope AI
-
-**Universal telemetry replay, audit, and anomaly detection platform.**
-
-Built for space operations. Designed for any complex system.
-
----
-
-## What It Does
-
-ChronoScope AI is the first unified platform that lets any operations
-team:
-
-1. **Replay** any past mission moment with perfect, deterministic fidelity
-2. **Audit** every decision with a tamper-evident cryptographic chain
-3. **Detect** anomalies before they become failures using explainable AI
-4. **Report** complete mission summaries in JSON and Markdown instantly
-
----
-
-## The Problem It Solves
-
-When something goes wrong in a complex mission, operations teams spend
-**days to weeks** manually reconstructing what happened — digging through
-CSV files, scattered logs, shift notes, and emails.
-
-ChronoScope reduces that to **hours**.
-
-| Without ChronoScope | With ChronoScope |
-|---------------------|-----------------|
-| Manual CSV investigation | Deterministic replay |
-| Scattered audit logs | Cryptographic chain |
-| Rule-based alarms only | AI with explainable output |
-| Fragmented tools | Single unified platform |
-| Days to investigate | Hours to investigate |
-
----
-
-## Live Demo Output
-
-Running on real NOAA DSCOVR spacecraft data (L1 Lagrange Point,
-1.5 million km from Earth):
-✓  Connected to real NASA spacecraft (DSCOVR)
-✓  Ingested 223 real telemetry packets
+```
+✓  Connected to NOAA DSCOVR — live solar wind data
+✓  Ingested 223 real telemetry packets (plasma + magnetic field)
 ✓  Loaded session into deterministic replay engine
-✓  Seeked to any point in the timeline instantly
-✓  Verified mathematical determinism (fingerprint)
-✓  Ran AI anomaly detection with explainable output
+✓  Seeked to arbitrary timeline points (0.30 ms per seek)
+✓  Verified determinism via SHA-256 session fingerprint
+✓  Ran anomaly detection — flagged real deviation
 ✓  Logged 10 audit entries with SHA-256 chain
-✓  Generated dashboard health snapshot
-✓  Produced professional JSON and Markdown reports
+✓  Generated JSON and Markdown investigation report
+```
 
-Real anomaly detected during demo:
+Example anomaly detected during live demo:
+
+```
 [MEDIUM] ion_temperature_k
-Observed:   562,201 K
-Expected:   < 500,000 K
-Confidence: 86%
-Reason:     Ion temperature 12.4% above threshold.
-High-speed stream event signature.
-Action:     Log HSS event and monitor (89% success rate)
+  Observed:   562,201 K
+  Expected:   < 500,000 K (baseline threshold)
+  Deviation:  12.4% above threshold — 2.4σ
+  Confidence: 86%
+  Pattern:    Matches high-speed solar wind stream signature
+  Action:     Log HSS event and monitor (89% historical success rate)
+```
 
 ---
 
 ## Architecture
-NOAA / NASA APIs
-↓
-Ingestion Layer          — Pluggable adapters per data source
-↓
-Domain Models            — Immutable, validated telemetry packets
-↓
-Replay Engine            — Deterministic, SHA-256 fingerprinted
-↓
-AI Detector              — Pattern matching, explainable output
-↓
-Audit Log                — Tamper-evident cryptographic chain
-↓
-Dashboard + CLI + API    — Unified operator interface
-↓
-Reporter                 — JSON + Markdown mission reports
+
+```
+NOAA / NASA APIs (public, no API key required)
+  │
+  ▼
+Ingestion Layer ──────── Pluggable adapters per data source
+  │
+  ▼
+Domain Models ────────── Immutable, validated telemetry packets (frozen dataclasses)
+  │
+  ▼
+Replay Engine ────────── Deterministic playback, SHA-256 fingerprinted sessions
+  │
+  ▼
+Anomaly Detector ─────── Z-score analysis, pattern matching, temporal correlation
+  │                       Every flag carries a mandatory human-readable explanation
+  ▼
+Audit Log ────────────── Tamper-evident SHA-256 cryptographic chain
+  │
+  ▼
+Reporter ─────────────── Structured JSON + Markdown investigation reports
+  │
+  ▼
+CLI + REST API ───────── Unified operator interface
+```
 
 ---
 
-## Key Design Decisions
+## Design Principles
 
-**Immutability** — Every telemetry packet is frozen on creation.
-No packet can be altered after ingestion. Ever.
+**Immutability.** Every telemetry packet is a frozen dataclass. No packet can be altered after ingestion.
 
-**Determinism** — Same session + same timestamp always produces
-identical replay output. Mathematically guaranteed via SHA-256
-session fingerprinting.
+**Determinism.** Same session + same timestamp = identical replay output. Guaranteed via SHA-256 session fingerprinting.
 
-**Explainability** — Every AI anomaly flag carries a mandatory
-human-readable reason. No black box outputs. Ever.
+**Explainability.** Every anomaly flag carries a mandatory human-readable reason, observed vs. expected values, confidence score, and suggested action with historical success rate. No black-box outputs.
 
-**Tamper evidence** — Every audit entry is cryptographically
-chained. Breaking any entry breaks the entire chain. Tampering
-is mathematically detectable.
+**Tamper evidence.** Every audit entry is cryptographically chained to the previous entry. Breaking any entry breaks the entire chain. Tampering is mathematically detectable.
 
 ---
 
 ## Test Coverage
-181 tests passing
-2.72 seconds
-0 failures
 
-tests/benchmarks/         — Performance at scale
-tests/integration/        — End-to-end API + reporter
-tests/unit/               — All core modules
+```
+334 tests passing · 2.97 seconds · 0 failures
 
-Seek performance: **0.30ms per seek** on 10,000 packets.
+tests/unit/           — All core modules (models, replay, audit, detection, SDK)
+tests/integration/    — End-to-end API and reporter pipelines
+tests/benchmarks/     — Performance at scale (seek latency, throughput)
+```
+
+Replay seek performance: **0.30 ms per seek** on 10,000 packets.
 
 ---
 
-## Supported Data Sources
+## Project Structure
 
-| Source | Format | Status |
-|--------|--------|--------|
-| NOAA DSCOVR | Solar wind plasma + magnetic | ✅ Live |
-| Any CCSDS source | Standard packet format | ✅ Ready |
-| Aviation (ARINC 429) | Flight data | 🔜 Planned |
-| Maritime (NMEA) | Vessel data | 🔜 Planned |
-| Industrial (MQTT) | Sensor streams | 🔜 Planned |
+```
+src/chronoscope/
+├── domain/          Models, enums, exceptions, constants
+├── ingestion/       Data source adapters (NOAA DSCOVR, CelesTrak, ACE, OpenSky)
+├── replay/          Deterministic replay engine + cursor
+├── ai/              Anomaly detection (statistical + pattern matching)
+├── audit/           Tamper-evident cryptographic audit log
+├── api/             FastAPI REST endpoints + security
+├── dashboard/       Health snapshot and status
+├── reporting/       Hourly report generation
+├── observability/   Structured event logging
+├── sdk/             Client SDK, webhook support
+├── cli.py           Command-line interface
+├── controller.py    Orchestration layer
+└── reporter.py      JSON + Markdown report generation
+
+tests/               334 automated tests (unit + integration + benchmarks)
+scripts/             Demo scripts running on live NASA data
+docs/                Architecture documentation
+```
+
+---
+
+## Data Sources
+
+| Source | Type | Status |
+|---|---|---|
+| NOAA DSCOVR | Solar wind plasma + magnetic field | ✅ Live |
+| NOAA ACE | Solar wind backup source | ✅ Ready |
+| CelesTrak | Satellite TLE orbital data | ✅ Ready |
+| OpenSky Network | Aircraft ADS-B telemetry | ✅ Ready |
+| Any CCSDS source | Standard space packet format | ✅ Adapter ready |
 
 ---
 
 ## Quick Start
 
 ```bash
-# Activate environment
-.venv\Scripts\activate          # Windows
-source .venv/bin/activate       # Mac/Linux
+# Clone and set up
+git clone https://github.com/PELEDIYAS369/ChronoScope.git
+cd ChronoScope
+python -m venv .venv
+source .venv/bin/activate        # macOS/Linux
+# .venv\Scripts\activate         # Windows
+pip install -r requirements.txt
 
 # Run live demo on real NASA data
 python scripts/sale_demo.py
@@ -189,7 +178,7 @@ python scripts/sale_demo.py
 # Run all tests
 pytest tests/ -v
 
-# CLI usage
+# CLI
 python -m src.chronoscope.cli status
 python -m src.chronoscope.cli ingest --spacecraft DSCOVR --hours 2
 python -m src.chronoscope.cli audit
@@ -199,37 +188,21 @@ python -m src.chronoscope.cli audit
 
 ## Deployment
 
-ChronoScope runs fully on-premise. No cloud dependency.
-No API keys required for NOAA DSCOVR data.
-Standard Python 3.13 environment.
+Runs fully on-premise. No cloud dependency. No API keys required for NOAA DSCOVR data. Standard Python 3.13 environment.
 
-Designed to sit alongside existing ground operations tools:
-COSMOS, OpenMCT, YAMCS.
-
----
-
-## Target Markets
-
-**Primary:** Space ground operations centers
-NASA, ESA, CSA, JPL, commercial satellite operators
-
-**Secondary:** Aviation, maritime, defense, industrial IoT
-Same platform, pluggable data adapters per industry
-
----
-
-## Status
-
-Active development. Block 1 complete.
-181 tests passing. Live NASA data flowing.
-Sale demo ready.
+Designed to integrate alongside existing ground operations tools (COSMOS, OpenMCT, YAMCS).
 
 ---
 
 ## License
 
-Proprietary — ChronoScope AI Inc. All rights reserved.
+Proprietary — © 2026 Utsav Sojitra. All rights reserved.
+See [LICENSE](LICENSE) for details.
 
 ---
 
-*Built in Toronto, Canada.*
+## Contact
+
+chronoscope.ai@gmail.com
+
+Built in Toronto, Canada.

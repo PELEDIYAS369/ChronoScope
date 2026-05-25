@@ -1,15 +1,38 @@
+# Virtual environment
 .venv/
+venv/
+
+# Python
 __pycache__/
 *.pyc
 *.pyo
-.env
 *.egg-info/
 dist/
 build/
+
+# Testing
 .pytest_cache/
 .coverage
 htmlcov/
-data/raw/
+
+# Environment
+.env
 *.log
+
+# Data
+data/raw/
+
+# OS
 .DS_Store
-Thumbs.db
+Thumbbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Generated outputs
+chronoscope_demo_report.*
+*.generated.json
+*.generated.md
