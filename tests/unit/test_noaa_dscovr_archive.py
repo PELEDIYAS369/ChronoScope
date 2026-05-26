@@ -20,6 +20,7 @@ from src.chronoscope.ingestion.noaa_dscovr_archive import (
     APID_PLASMA,
     DATASET_FC,
     DATASET_MAG,
+    DSCOVR_H1_FC_END_DATE,
     DSCOVR_OPERATIONAL_DATE,
     NOAADscovrArchiveIngester,
     _parse_hapi_time,
@@ -29,28 +30,50 @@ from src.chronoscope.ingestion.noaa_dscovr_archive import (
 
 # ---------------------------------------------------------------------------
 # Fixture CSV bodies — HAPI default (no header), comma-separated.
-# Real HAPI responses look like this; column order matches what the CDAWeb
-# HAPI /info endpoint publishes for each dataset.
+# Column orders match the VERIFIED CDAWeb /info responses from 2026-05-26.
+#
+# DSCOVR_H1_FC columns (14 total): Time, DQF, V_GSE[0..2], V_GSE_ErrorBars[0..2],
+#   THERMAL_SPD, THERMAL_SPD_ErrorBars, Np, Np_ErrorBars, THERMAL_TEMP,
+#   THERMAL_TEMP_ErrorBars.
+# DSCOVR_H0_MAG columns (15 total): Time, B1F1, B1SDF1, B1GSE[0..2],
+#   B1SDGSE[0..2], B1RTN[0..2], B1SDRTN[0..2].
 # ---------------------------------------------------------------------------
 
-# DSCOVR_H1_FC columns: Epoch, Np, V_GSE_X, V_GSE_Y, V_GSE_Z, THERMAL_SPD
+# Three plasma rows. Values chosen to produce easily-asserted derived quantities:
+#  V_GSE = (-420.0, 12.5, -3.2)  -> bulk_speed = sqrt(...)
+#  DQF = 0 (good)
+#  Np = 5.2 cm^-3
+#  THERMAL_TEMP = 85000 K  (published in K, used directly)
+#  THERMAL_SPD = 37.5 km/s (kept as a separate parameter)
+# Error-bar columns are filled with 0.5 (arbitrary, parser ignores them).
 MOCK_FC_CSV = (
-    "2024-01-15T12:00:00.000Z,5.2,-420.0,12.5,-3.2,37.5\n"
-    "2024-01-15T12:01:00.000Z,5.4,-425.0,11.8,-2.9,38.1\n"
-    "2024-01-15T12:02:00.000Z,5.1,-418.0,13.1,-3.4,37.0\n"
+    "2018-03-15T12:00:00.000Z,0,-420.0,12.5,-3.2,0.5,0.5,0.5,37.5,0.5,5.2,0.5,85000.0,0.5\n"
+    "2018-03-15T12:01:00.000Z,0,-425.0,11.8,-2.9,0.5,0.5,0.5,38.1,0.5,5.4,0.5,86000.0,0.5\n"
+    "2018-03-15T12:02:00.000Z,0,-418.0,13.1,-3.4,0.5,0.5,0.5,37.0,0.5,5.1,0.5,84000.0,0.5\n"
 )
 
-# DSCOVR_H0_MAG columns: Epoch, B1F1, B1GSE_X, B1GSE_Y, B1GSE_Z
+# Three MAG rows. Values:
+#  B1F1 = 2.6 nT magnitude
+#  B1GSE = (-2.1, 1.3, -0.8) nT
+# All stddev / RTN columns set to 0.1 (parser ignores them; tests assert
+# they don't leak into the parameters dict).
 MOCK_MAG_CSV = (
-    "2024-01-15T12:00:00.000Z,2.6,-2.1,1.3,-0.8\n"
-    "2024-01-15T12:00:01.000Z,2.7,-2.3,1.1,-0.9\n"
-    "2024-01-15T12:00:02.000Z,2.5,-2.0,1.4,-0.7\n"
+    "2024-01-15T12:00:00.000Z,2.6,0.1,-2.1,1.3,-0.8,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1\n"
+    "2024-01-15T12:00:01.000Z,2.7,0.1,-2.3,1.1,-0.9,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1\n"
+    "2024-01-15T12:00:02.000Z,2.5,0.1,-2.0,1.4,-0.7,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1\n"
 )
 
-# Time window — post-DSCOVR-operational-date so the operational-window clamp
-# doesn't filter our test data.
-START = datetime(2024, 1, 15, 11, 0, 0, tzinfo=timezone.utc)
-END = datetime(2024, 1, 15, 13, 0, 0, tzinfo=timezone.utc)
+# Time windows.
+# Plasma window: inside the H1_FC coverage period (2016-06-03 → 2019-06-27).
+PLASMA_START = datetime(2018, 3, 15, 11, 0, 0, tzinfo=timezone.utc)
+PLASMA_END = datetime(2018, 3, 15, 13, 0, 0, tzinfo=timezone.utc)
+# MAG window: H0_MAG covers 2015 → present, so 2024 is fine.
+MAG_START = datetime(2024, 1, 15, 11, 0, 0, tzinfo=timezone.utc)
+MAG_END = datetime(2024, 1, 15, 13, 0, 0, tzinfo=timezone.utc)
+# Backwards-compatible aliases used by tests that don't care which dataset.
+# These point at the plasma window so combined fetches still work.
+START = PLASMA_START
+END = PLASMA_END
 
 
 def _make_csv_response(body: str) -> MagicMock:
@@ -128,9 +151,8 @@ class TestPlasmaIngestion:
         # bulk speed is magnitude of V_GSE = sqrt(420^2 + 12.5^2 + 3.2^2)
         expected_speed = math.sqrt(420.0**2 + 12.5**2 + 3.2**2)
         assert first.parameters["bulk_speed_km_s"] == pytest.approx(expected_speed)
-        # Temperature from thermal speed: T = v_th^2 * 60.5
-        expected_temp = 37.5**2 * 60.5
-        assert first.parameters["ion_temperature_k"] == pytest.approx(expected_temp)
+        # Temperature is published directly in THERMAL_TEMP — no conversion.
+        assert first.parameters["ion_temperature_k"] == pytest.approx(85000.0)
 
     @patch("src.chronoscope.ingestion.noaa_dscovr_archive.requests.get")
     def test_plasma_preserves_velocity_components(self, mock_get):
@@ -143,6 +165,14 @@ class TestPlasmaIngestion:
         assert first.parameters["thermal_speed_km_s"] == pytest.approx(37.5)
 
     @patch("src.chronoscope.ingestion.noaa_dscovr_archive.requests.get")
+    def test_plasma_preserves_data_quality_flag(self, mock_get):
+        """DQF must be preserved so downstream filters can drop bad rows."""
+        mock_get.return_value = _make_csv_response(MOCK_FC_CSV)
+        ingester = NOAADscovrArchiveIngester()
+        first = list(ingester._fetch_plasma_packets(START, END))[0]
+        assert first.parameters["data_quality_flag"] == 0.0
+
+    @patch("src.chronoscope.ingestion.noaa_dscovr_archive.requests.get")
     def test_plasma_marks_data_level_definitive(self, mock_get):
         mock_get.return_value = _make_csv_response(MOCK_FC_CSV)
         ingester = NOAADscovrArchiveIngester()
@@ -152,11 +182,12 @@ class TestPlasmaIngestion:
 
     @patch("src.chronoscope.ingestion.noaa_dscovr_archive.requests.get")
     def test_plasma_skips_malformed_rows(self, mock_get):
-        # First row well-formed, second row too few columns
+        # First row well-formed (14 cols), second row too few columns.
+        good_row = "0,-420.0,12.5,-3.2,0.5,0.5,0.5,37.5,0.5,5.2,0.5,85000.0,0.5"
         bad_csv = (
-            "2024-01-15T12:00:00.000Z,5.2,-420.0,12.5,-3.2,37.5\n"
-            "2024-01-15T12:01:00.000Z,5.4\n"  # only 2 columns
-            "2024-01-15T12:02:00.000Z,5.1,-418.0,13.1,-3.4,37.0\n"
+            f"2018-03-15T12:00:00.000Z,{good_row}\n"
+            "2018-03-15T12:01:00.000Z,0,5.4\n"  # truncated row
+            f"2018-03-15T12:02:00.000Z,{good_row}\n"
         )
         mock_get.return_value = _make_csv_response(bad_csv)
         ingester = NOAADscovrArchiveIngester()
@@ -209,6 +240,24 @@ class TestMagneticIngestion:
         assert first.parameters["bx_gse_nt"] == pytest.approx(-2.1)
         assert first.parameters["by_gse_nt"] == pytest.approx(1.3)
         assert first.parameters["bz_gse_nt"] == pytest.approx(-0.8)
+
+    @patch("src.chronoscope.ingestion.noaa_dscovr_archive.requests.get")
+    def test_mag_does_not_leak_stddev_or_rtn(self, mock_get):
+        """
+        Regression test for the column-order bug found in the original parser:
+        it must NOT confuse stddev columns or RTN-frame values for the GSE
+        components. If the mock CSV has 0.1 in all skip columns and the GSE
+        values are -2.1/1.3/-0.8, none of the GSE-named parameters should
+        equal 0.1.
+        """
+        mock_get.return_value = _make_csv_response(MOCK_MAG_CSV)
+        ingester = NOAADscovrArchiveIngester()
+        first = list(ingester._fetch_magnetic_packets(START, END))[0]
+        for key in ("bx_gse_nt", "by_gse_nt", "bz_gse_nt"):
+            assert first.parameters[key] != pytest.approx(0.1), (
+                f"{key} got the stddev/RTN value instead of the GSE value — "
+                f"column-order regression."
+            )
 
     @patch("src.chronoscope.ingestion.noaa_dscovr_archive.requests.get")
     def test_mag_raw_bytes_layout(self, mock_get):
@@ -358,6 +407,69 @@ class TestOperationalWindow:
 
 
 # ---------------------------------------------------------------------------
+# DSCOVR_H1_FC dataset-end-date safety
+# ---------------------------------------------------------------------------
+
+
+class TestH1FCEndDate:
+    """
+    The DSCOVR_H1_FC plasma dataset stopped being updated after 2019-06-27.
+    Requesting plasma data past that date must surface a clear warning rather
+    than silently returning nothing and pretending all is well.
+    """
+
+    @patch("src.chronoscope.ingestion.noaa_dscovr_archive.requests.get")
+    def test_plasma_request_after_h1_fc_end_makes_no_http_call(self, mock_get):
+        """Pure plasma fetch with a start time past H1_FC end skips HTTP."""
+        ingester = NOAADscovrArchiveIngester()
+        # Window entirely after H1_FC end date
+        post_end_start = datetime(2022, 1, 1, tzinfo=timezone.utc)
+        post_end_end = datetime(2022, 1, 2, tzinfo=timezone.utc)
+        packets = list(ingester._fetch_plasma_packets(
+            post_end_start, post_end_end
+        ))
+        assert packets == []
+        mock_get.assert_not_called()
+
+    @patch("src.chronoscope.ingestion.noaa_dscovr_archive.requests.get")
+    def test_mag_still_fetches_after_h1_fc_end(self, mock_get):
+        """MAG is unaffected by the H1_FC end date — it goes to present day."""
+        mock_get.return_value = _make_csv_response(MOCK_MAG_CSV)
+        ingester = NOAADscovrArchiveIngester()
+        post_end_start = datetime(2024, 1, 15, 11, 0, 0, tzinfo=timezone.utc)
+        post_end_end = datetime(2024, 1, 15, 13, 0, 0, tzinfo=timezone.utc)
+        packets = list(ingester._fetch_magnetic_packets(
+            post_end_start, post_end_end
+        ))
+        assert len(packets) == 3
+
+    @patch("src.chronoscope.ingestion.noaa_dscovr_archive.requests.get")
+    def test_full_fetch_post_h1_fc_end_returns_only_mag(self, mock_get):
+        """
+        A combined fetch_packets call with a start past H1_FC end must skip
+        the plasma HTTP call entirely but still fetch MAG. Result: only
+        magnetic packets, exactly one HTTP call.
+        """
+        mock_get.return_value = _make_csv_response(MOCK_MAG_CSV)
+        ingester = NOAADscovrArchiveIngester()
+        post_end_start = datetime(2024, 1, 15, 11, 0, 0, tzinfo=timezone.utc)
+        post_end_end = datetime(2024, 1, 15, 13, 0, 0, tzinfo=timezone.utc)
+        packets = list(ingester.fetch_packets(
+            SPACECRAFT_DSCOVR, post_end_start, post_end_end
+        ))
+        assert len(packets) == 3
+        assert all(p.apid == APID_MAGNETIC for p in packets)
+        assert mock_get.call_count == 1
+
+    def test_h1_fc_end_date_matches_documented_value(self):
+        """Smoke test: CDAWeb /info reports stopDate 2019-06-27 for H1_FC."""
+        # We store the exclusive upper bound (2019-06-28).
+        assert DSCOVR_H1_FC_END_DATE == datetime(
+            2019, 6, 28, tzinfo=timezone.utc
+        )
+
+
+# ---------------------------------------------------------------------------
 # Empty / edge cases
 # ---------------------------------------------------------------------------
 
@@ -375,7 +487,7 @@ class TestEmptyResponses:
         body = (
             "# this is a server comment\n"
             "\n"
-            "2024-01-15T12:00:00.000Z,5.2,-420.0,12.5,-3.2,37.5\n"
+            "2018-03-15T12:00:00.000Z,0,-420.0,12.5,-3.2,0.5,0.5,0.5,37.5,0.5,5.2,0.5,85000.0,0.5\n"
         )
         mock_get.return_value = _make_csv_response(body)
         ingester = NOAADscovrArchiveIngester()

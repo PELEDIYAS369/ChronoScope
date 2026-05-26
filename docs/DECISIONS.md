@@ -6,6 +6,69 @@ Format: most recent decisions at the top.
 
 ---
 
+## DEC-005: HAPI column-order verification + DSCOVR_H1_FC end-date acknowledgement
+
+**Date:** 2026-05-26
+**Status:** Accepted (implemented)
+
+**Context:** DEC-004 committed to using the CDAWeb HAPI server for historical DSCOVR ingest, but the column mapping in the initial parser was based on documented dataset schemas rather than a live `/info` response (the sandbox where the code was written can't reach NASA domains). STATUS.md flagged this as the first thing to validate before any corpus-building work began.
+
+A 30-second `curl` against `https://cdaweb.gsfc.nasa.gov/hapi/info?id=DSCOVR_H1_FC` and `DSCOVR_H0_MAG` surfaced three things the documented-schema approach got wrong, plus one additional finding about dataset coverage.
+
+**What we learned:**
+
+1. **HAPI flattens vector parameters across multiple CSV columns.** A parameter declared with `size: [3]` (e.g. `V_GSE`, `B1GSE`) is published as three consecutive columns. The CSV column count is therefore much larger than the number of named parameters in `/info`. Real layouts:
+
+   `DSCOVR_H1_FC` — **14 CSV columns**:
+   `Time, DQF, V_GSE[0], V_GSE[1], V_GSE[2], V_GSE_ErrorBars[0..2], THERMAL_SPD, THERMAL_SPD_ErrorBars, Np, Np_ErrorBars, THERMAL_TEMP, THERMAL_TEMP_ErrorBars`
+
+   `DSCOVR_H0_MAG` — **15 CSV columns**:
+   `Time, B1F1, B1SDF1, B1GSE[0..2], B1SDGSE[0..2], B1RTN[0..2], B1SDRTN[0..2]`
+
+2. **The original parser had every column wrong after `Time`.** Plasma parser assumed `[1]=Np` when it's actually `[1]=DQF`. Mag parser assumed `[2]=Bx` when it's actually `[2]=stddev of |B|`. If we had built corpus storage on top of this, every Parquet file would have contained silently wrong data — DQF values stored as density, stddev stored as Bx, RTN-frame values mixed in, etc. The errors would have surfaced weeks later as nonsense causal-discovery results, costing a re-run of the full multi-hour backfill.
+
+3. **`THERMAL_TEMP` is published directly in Kelvin.** The original parser computed temperature from thermal speed via `T = v_th² × 60.5`. That math is now redundant and removed; we use the published value directly.
+
+4. **`DSCOVR_H1_FC` was not updated past 2019-06-27.** The dataset's `stopDate` in `/info` is `2019-06-27T23:58:59Z`. This corresponds to the DSCOVR safe-mode incident in June 2019; later definitive plasma data exists at NOAA NCEI in a different format, but not on CDAWeb HAPI. The `DSCOVR_H0_MAG` dataset is unaffected — its `stopDate` is current (`2026-04-05` at time of verification) and continues updating.
+
+**Decision:**
+
+- Rewrite both parsers to match the verified column order.
+- Drop the thermal-speed-to-temperature math; use published `THERMAL_TEMP` directly. Keep thermal speed as a separate parameter for downstream use.
+- Preserve `DQF` (data quality flag) in the parameters dict so downstream filters can drop bad-quality rows.
+- Add a `DSCOVR_H1_FC_END_DATE` constant (`2019-06-28`, exclusive upper bound) and gate plasma fetches on it. Post-2019 plasma requests get a clear `WARNING` log entry and skip the HTTP round-trip instead of silently returning an empty corpus.
+- MAG fetches are unconditional (other than the operational-date floor from DEC-004) since `DSCOVR_H0_MAG` covers the full operational period.
+
+**Coverage consequences for the planned corpus:**
+
+| Product | Coverage | Years available |
+|---|---|---|
+| `DSCOVR_H0_MAG` (1-sec magnetometer) | 2015-06-08 → present | ~11 years |
+| `DSCOVR_H1_FC` (1-min Faraday Cup plasma, definitive) | 2016-06-03 → 2019-06-27 | ~3 years |
+
+Post-2019 plasma backfill is a separate work item — see EXPERIMENTS.md and STATUS.md for the open question.
+
+**Alternatives considered:**
+
+- *Continue building corpus storage on the unverified parser* — Rejected. Compounding investment on a wrong foundation. The cost of verification was 30 seconds of `curl`; the cost of discovering the bug after a multi-hour backfill would be the entire backfill.
+- *Use only MAG for now, defer plasma to later* — Tempting but rejected. Causal discovery between plasma and field parameters (e.g. `Bz` → enhanced geomagnetic activity, `density × velocity` → dynamic pressure) is the whole scientific point. We need both products in the corpus from the start, even if the plasma window is shorter.
+- *Switch to NOAA NCEI plasma archive immediately to get post-2019 coverage* — Deferred. NCEI uses NetCDF in a different schema; integrating it is significant work that would push back Phase 1. Better to ship the 3-year plasma corpus now and add post-2019 as DEC-006 once basic ingest + storage works.
+
+**Reasoning:**
+
+- Verifying assumptions at the lowest layer of the stack early is dramatically cheaper than discovering wrongness after layers of code depend on it.
+- The 3-year plasma window is still 3 × 365 × 1440 ≈ 1.5M plasma records, plenty for initial causal discovery experiments. The full MAG corpus (11 years × ~86k records/day ≈ 350M records) is also more than enough.
+- Preserving `DQF` is cheap and protects future ML experiments from silently consuming bad-quality rows.
+
+**Consequences:**
+
+- *Easier:* Corpus we build now is trustworthy by construction. No silent data corruption to chase later.
+- *Easier:* Operators get a clear warning instead of mysterious silence when requesting post-2019 plasma. The H1_FC end-date being a named constant makes the constraint discoverable.
+- *Harder:* The 3-year plasma window vs 11-year MAG window means any joined plasma+mag corpus is limited to ~3 years until we ingest NCEI post-2019 plasma. We accept this for now.
+- *Harder:* `_safe_float` still treats HAPI fill values (`-1.0E31`) as valid data. A future filter pass needs to drop fill rows before training. Tracked in STATUS.md.
+
+---
+
 ## DEC-004: Use HAPI for historical DSCOVR ingest; Parquet + DuckDB for the corpus
 
 **Date:** 2026-05-25

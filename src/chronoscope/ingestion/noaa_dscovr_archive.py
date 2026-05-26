@@ -73,6 +73,13 @@ APID_MAGNETIC = 0x65      # 101 decimal — magnetic field measurements
 # Earliest date with valid space-environment data (post-commissioning)
 DSCOVR_OPERATIONAL_DATE = datetime(2016, 7, 27, tzinfo=timezone.utc)
 
+# Last date for which the definitive Faraday Cup plasma dataset (DSCOVR_H1_FC)
+# is published on CDAWeb. The dataset stopped being updated after the DSCOVR
+# safe-mode incident in June 2019; later definitive plasma data is archived
+# elsewhere (NOAA NCEI). The MAG dataset (DSCOVR_H0_MAG) is unaffected and
+# continues to be updated.
+DSCOVR_H1_FC_END_DATE = datetime(2019, 6, 28, tzinfo=timezone.utc)
+
 # HAPI time format — restricted ISO 8601 with millisecond precision and Z
 _HAPI_TIME_FMT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
@@ -193,6 +200,21 @@ class NOAADscovrArchiveIngester(BaseIngester):
         end_time: datetime,
     ) -> Iterator[TelemetryPacket]:
         """Fetch and parse Faraday Cup plasma records."""
+        # DSCOVR_H1_FC ends 2019-06-27. If the entire requested window is past
+        # that date, save the HTTP round-trip and surface a clear warning so
+        # nobody thinks they got an empty corpus due to a bug.
+        if start_time >= DSCOVR_H1_FC_END_DATE:
+            self.logger.warning(
+                "plasma_request_after_h1_fc_end_date",
+                requested_start=start_time.isoformat(),
+                h1_fc_end_date=DSCOVR_H1_FC_END_DATE.isoformat(),
+                note=(
+                    "DSCOVR_H1_FC was not updated past 2019-06-27. "
+                    "Post-2019 definitive plasma data is archived elsewhere."
+                ),
+            )
+            return
+
         rows = self._fetch_hapi_csv(DATASET_FC, start_time, end_time)
         sequence = 0
         for row in rows:
@@ -213,37 +235,52 @@ class NOAADscovrArchiveIngester(BaseIngester):
         """
         Parse one HAPI CSV row from DSCOVR_H1_FC into a TelemetryPacket.
 
-        Expected column order (HAPI info confirms; we follow the documented
-        DSCOVR_H1_FC schema):
-          [0] Epoch (ISO 8601)
-          [1] Np                 — proton density (cm^-3)
-          [2] V_GSE_X            — bulk velocity X in GSE (km/s)
-          [3] V_GSE_Y            — bulk velocity Y in GSE (km/s)
-          [4] V_GSE_Z            — bulk velocity Z in GSE (km/s)
-          [5] THERMAL_SPD        — thermal speed (km/s)
+        Column order (VERIFIED against live CDAWeb HAPI /info on 2026-05-26;
+        see DECISIONS.md DEC-005):
+          [0]  Time          — ISO 8601
+          [1]  DQF           — data quality flag (0 = good)
+          [2]  V_GSE[0]      — Vx in GSE (km/s)
+          [3]  V_GSE[1]      — Vy in GSE (km/s)
+          [4]  V_GSE[2]      — Vz in GSE (km/s)
+          [5]  V_GSE_ErrorBars[0]     — (skipped — uncertainty)
+          [6]  V_GSE_ErrorBars[1]     — (skipped)
+          [7]  V_GSE_ErrorBars[2]     — (skipped)
+          [8]  THERMAL_SPD            — proton thermal speed (km/s)
+          [9]  THERMAL_SPD_ErrorBars  — (skipped)
+          [10] Np                     — proton density (cm^-3)
+          [11] Np_ErrorBars           — (skipped)
+          [12] THERMAL_TEMP           — proton temperature (K) — published directly
+          [13] THERMAL_TEMP_ErrorBars — (skipped)
 
-        If thermal speed is published instead of temperature, we convert
-        T_ion = m_p * v_th^2 / (2 * k_B) so we can store the same
-        `ion_temperature_k` parameter the live ingester uses.
+        HAPI vector parameters (e.g. V_GSE with size=[3]) are flattened into
+        three consecutive CSV columns, which is why what looks like 6 named
+        parameters in the /info response becomes 14 CSV columns.
+
+        HAPI fill value for plasma doubles is -1.0E31. Fill values are
+        preserved in the packet parameters so downstream code can decide how
+        to handle them; a separate filter pass should drop fill rows before
+        training. The DQF flag is also preserved for the same reason.
         """
-        if len(row) < 6:
+        if len(row) < 14:
             raise PacketParseError(
-                f"Plasma row has {len(row)} columns, expected >= 6", None
+                f"Plasma row has {len(row)} columns, expected >= 14", None
             )
 
         timestamp = _parse_hapi_time(row[0])
-        density = self._safe_float(row[1])
+        dqf = self._safe_float(row[1])
         vx_gse = self._safe_float(row[2])
         vy_gse = self._safe_float(row[3])
         vz_gse = self._safe_float(row[4])
-        thermal_speed = self._safe_float(row[5])
+        # row[5..7] are V error bars — skipped
+        thermal_speed = self._safe_float(row[8])
+        # row[9] is thermal speed error bar — skipped
+        density = self._safe_float(row[10])
+        # row[11] is density error bar — skipped
+        ion_temperature_k = self._safe_float(row[12])
+        # row[13] is temperature error bar — skipped
 
         # Magnitude of velocity (matches live ingester's `bulk_speed_km_s`)
         bulk_speed = math.sqrt(vx_gse * vx_gse + vy_gse * vy_gse + vz_gse * vz_gse)
-
-        # Thermal speed -> ion temperature (K).
-        # T = m_p * v_th^2 / (2 * k_B); m_p / (2 * k_B) ≈ 60.5 K / (km/s)^2
-        ion_temperature_k = (thermal_speed * thermal_speed) * 60.5
 
         parameters = {
             "proton_density_n_cc": density,
@@ -253,6 +290,7 @@ class NOAADscovrArchiveIngester(BaseIngester):
             "vy_gse_km_s": vy_gse,
             "vz_gse_km_s": vz_gse,
             "thermal_speed_km_s": thermal_speed,
+            "data_quality_flag": dqf,
             "data_type": "plasma",
             "data_level": "definitive",
             "archive_dataset": DATASET_FC,
@@ -299,28 +337,45 @@ class NOAADscovrArchiveIngester(BaseIngester):
         sequence: int,
     ) -> TelemetryPacket | None:
         """
-        Parse one HAPI CSV row from DSCOVR_H0_MAG.
+        Parse one HAPI CSV row from DSCOVR_H0_MAG into a TelemetryPacket.
 
-        Expected column order:
-          [0] Epoch (ISO 8601)
-          [1] B1F1        — magnitude |B| (nT)
-          [2] B1GSE_X     — Bx in GSE (nT)
-          [3] B1GSE_Y     — By in GSE (nT)
-          [4] B1GSE_Z     — Bz in GSE (nT)
+        Column order (VERIFIED against live CDAWeb HAPI /info on 2026-05-26;
+        see DECISIONS.md DEC-005):
+          [0]  Time            — ISO 8601
+          [1]  B1F1            — |B| magnitude (nT)
+          [2]  B1SDF1          — stddev of |B|  (skipped)
+          [3]  B1GSE[0]        — Bx in GSE (nT)
+          [4]  B1GSE[1]        — By in GSE (nT)
+          [5]  B1GSE[2]        — Bz in GSE (nT)
+          [6]  B1SDGSE[0]      — stddev (skipped)
+          [7]  B1SDGSE[1]      — stddev (skipped)
+          [8]  B1SDGSE[2]      — stddev (skipped)
+          [9]  B1RTN[0]        — Br RTN  (skipped — we use GSE)
+          [10] B1RTN[1]        — Bt RTN  (skipped)
+          [11] B1RTN[2]        — Bn RTN  (skipped)
+          [12] B1SDRTN[0]      — stddev (skipped)
+          [13] B1SDRTN[1]      — stddev (skipped)
+          [14] B1SDRTN[2]      — stddev (skipped)
 
-        Note: archive uses GSE, distinct from live SWPC feed which is GSM.
-        We store under explicitly-named GSE keys.
+        Like the plasma dataset, vector parameters with size=[3] flatten into
+        three CSV columns, so 7 named parameters in /info become 15 CSV columns.
+
+        Note: archive uses GSE, distinct from live SWPC feed which is GSM. We
+        store under explicitly-named GSE keys to keep the coordinate frame
+        unambiguous in downstream code. Fill value is -1.0E31.
         """
-        if len(row) < 5:
+        if len(row) < 6:
+            # Bare minimum to extract |B| + GSE vector
             raise PacketParseError(
-                f"Magnetic row has {len(row)} columns, expected >= 5", None
+                f"Magnetic row has {len(row)} columns, expected >= 6", None
             )
 
         timestamp = _parse_hapi_time(row[0])
         bt = self._safe_float(row[1])
-        bx_gse = self._safe_float(row[2])
-        by_gse = self._safe_float(row[3])
-        bz_gse = self._safe_float(row[4])
+        # row[2] is B1SDF1 stddev of |B| — skipped
+        bx_gse = self._safe_float(row[3])
+        by_gse = self._safe_float(row[4])
+        bz_gse = self._safe_float(row[5])
 
         parameters = {
             "bx_gse_nt": bx_gse,

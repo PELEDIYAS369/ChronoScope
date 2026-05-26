@@ -17,7 +17,20 @@ We are still in the foundation-building phase. No model has trained, no causal
 discovery has run. The first experiments will begin once the historical DSCOVR
 corpus is persisted to Parquet (see STATUS.md Phase 1 and DEC-004).
 
-**Pre-experiment recon performed this session (2026-05-25):**
+**Pre-experiment recon performed this session (2026-05-26):**
+
+- *HAPI column order verified against live `/info` responses.* Discovered three things the documented-schema-based parser got wrong (vector flattening, position of DQF, B-field stddev mistaken for GSE component). Discovered that `DSCOVR_H1_FC` ends 2019-06-27; only `DSCOVR_H0_MAG` covers the full ~11-year operational period. Parser rewritten with verified mappings; +6 net new tests including a regression test that asserts stddev/RTN columns can't leak into the GSE parameters dict. Full details in DECISIONS.md DEC-005.
+- *Coverage matrix for the corpus we will build:*
+
+  | Product | Cadence | Coverage | Records (estimate) |
+  |---|---|---|---|
+  | `DSCOVR_H0_MAG` | 1 sec | 2015-06-08 → present (~11 yr) | ~350M |
+  | `DSCOVR_H1_FC`  | 1 min | 2016-06-03 → 2019-06-27 (~3 yr) | ~1.5M |
+
+  The asymmetry matters: any joined plasma+MAG corpus is limited to the ~3-year plasma window until we ingest NOAA NCEI post-2019 plasma (deferred, possible DEC-006).
+- *HAPI fill value confirmed:* `-1.0E31` is the documented fill for both datasets. The current `_safe_float` keeps these values; pre-corpus filtering is queued in STATUS.md Phase 1.
+
+**Pre-experiment recon performed last session (2026-05-25):**
 
 - *Archive access path identified:* NASA SPDF/CDAWeb HAPI server at
   `https://cdaweb.gsfc.nasa.gov/hapi/` serves DSCOVR_H0_MAG (1-sec mag) and
