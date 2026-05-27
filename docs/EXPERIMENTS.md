@@ -17,6 +17,10 @@ We are still in the foundation-building phase. No model has trained, no causal
 discovery has run. The first experiments will begin once the historical DSCOVR
 corpus is persisted to Parquet (see STATUS.md Phase 1 and DEC-004).
 
+**Infrastructure milestone (2026-05-26, this session):**
+
+- *Corpus persistence layer built and unit-tested.* `src/chronoscope/corpus/storage.py` writes `TelemetryPacket` streams to year/month-partitioned Parquet with zstd compression and reads them back via DuckDB. Two instruments (`mag`, `plasma`) get separate trees with distinct schemas. HAPI fill values (`-1.0E31`) and bad plasma DQF rows are filtered at the storage boundary by default; both filters can be disabled for data exploration. Writes are idempotent — re-running a backfill window doesn't duplicate data. 28 new tests, all in `tests/unit/test_corpus_storage.py`. Honest caveat: zero real DSCOVR data has flowed through this code yet (sandbox network limits); first real-data run is Utsav's next session task.
+
 **Pre-experiment recon performed this session (2026-05-26):**
 
 - *HAPI column order verified against live `/info` responses.* Discovered three things the documented-schema-based parser got wrong (vector flattening, position of DQF, B-field stddev mistaken for GSE component). Discovered that `DSCOVR_H1_FC` ends 2019-06-27; only `DSCOVR_H0_MAG` covers the full ~11-year operational period. Parser rewritten with verified mappings; +6 net new tests including a regression test that asserts stddev/RTN columns can't leak into the GSE parameters dict. Full details in DECISIONS.md DEC-005.

@@ -1,7 +1,7 @@
 # ChronoScope — Current Status
 
 **Last updated:** 2026-05-26
-**Last session:** HAPI parser verification & rewrite (DEC-005)
+**Last session:** Corpus persistence layer (Parquet + DuckDB)
 
 ---
 
@@ -10,36 +10,36 @@
 **Phase:** Phase 1 of causal-diagnosis engine — foundation for ML work.
 
 **Codebase health:**
-- 370 tests passing (was 364; +6 net new after parser rewrite)
-- HAPI ingester column mapping verified against live CDAWeb `/info` responses
-- Documentation up to date
+- 398 tests passing (was 370; +28 new for the corpus storage layer)
+- HAPI ingester column mapping verified (DEC-005)
+- Corpus storage layer implemented and unit-tested (DEC-004 partially executed)
+- `pyarrow==24.0.0` and `duckdb==1.5.3` added to `requirements.txt`
 
-**Strategic direction unchanged** — automated causal root-cause diagnosis (DEC-003). Storage strategy resolved (DEC-004). Ingester correctness now verified (DEC-005).
+**Strategic direction unchanged** — automated causal root-cause diagnosis (DEC-003).
 
 ---
 
 ## What's Working
 
-- Telemetry ingestion: NOAA DSCOVR live (7-day SWPC feed), ACE, CelesTrak, OpenSky
-- **NOAA DSCOVR historical archive ingester** via NASA CDAWeb HAPI server.
-  - `DSCOVR_H0_MAG` 1-sec magnetometer (2015 → present)
-  - `DSCOVR_H1_FC` 1-min Faraday Cup plasma (2016-06-03 → 2019-06-27, definitive)
-  - Parsers verified column-by-column against live `/info` responses (DEC-005)
-  - DQF (data quality flag) preserved for downstream filtering
-  - `THERMAL_TEMP` used directly (no more redundant thermal-speed math)
-  - Post-2019 plasma requests get clear warnings instead of silent empty corpus
-  - GSE coordinate frame keys (`bx_gse_nt`) distinct from live ingester's GSM keys
-- Operational-window safety: pre-2016-07-27 requests clamped to commissioning date
-- Deterministic replay, cryptographic audit chain, basic anomaly detection,
-  REST API, CLI, reporter — unchanged
+- Telemetry ingestion: live DSCOVR (SWPC), archive DSCOVR (HAPI), ACE, CelesTrak, OpenSky
+- HAPI archive ingester with verified column mapping (DEC-005)
+- **NEW: Corpus persistence layer** (`src/chronoscope/corpus/storage.py`):
+  - `write_partitioned_parquet(packets, root, ...)` — writes year/month-partitioned Parquet files with zstd compression
+  - `CorpusReader(root)` — DuckDB-backed SQL query helper; exposes `mag` and `plasma` views, plus `count()` and `time_range()` convenience methods
+  - HAPI fill-value filtering (`-1.0E31` and NaN) — on by default, can be disabled
+  - Plasma DQF gate (drop rows with `data_quality_flag != 0`) — on by default
+  - Honest `WriteReport` per instrument with `rows_seen / rows_written / rows_dropped_fill / rows_dropped_dqf`
+  - Idempotent writes (re-writing the same data overwrites cleanly, no duplicates)
+  - Empty-corpus reads return zero rows (no crash on fresh trees)
+- Deterministic replay, audit chain, anomaly detection, REST API, CLI, reporter — unchanged
 
 ## What's NOT Working / Missing
 
-- **No corpus persistence layer yet** — ingester yields `TelemetryPacket` objects but Parquet+DuckDB storage (per DEC-004) is not wired up. This is the next concrete step.
-- **No bulk-backfill script** — single-day ingest works; multi-year orchestration with resumable checkpoints does not exist yet.
-- **No post-2019 plasma source** — `DSCOVR_H1_FC` ends 2019-06-27. Post-2019 definitive plasma is at NOAA NCEI in a different format; integrating it is a separate work item (DEC-006 candidate).
-- **HAPI fill-value filtering** — `_safe_float` currently keeps `-1.0E31` fill values. A pre-storage filter should drop fill rows before they hit the corpus.
-- No causal inference, no ML models, no web UI — same as last session.
+- **Storage layer is unit-tested but not yet exercised against real DSCOVR data.** All 28 new tests use packets constructed in-process; no real HAPI fetch has fed into the writer yet. Validating with one day of real data is the immediate next step for Utsav.
+- **No bulk-backfill script** — single ingest → write works; multi-year orchestration with resumable checkpoints does not exist yet. This is the next thing to build.
+- **No post-2019 plasma source** — `DSCOVR_H1_FC` ends 2019-06-27. Deferred (likely DEC-006).
+- **No corpus-level sanity checks** — once real data is in the corpus, we need to verify physics consistency: `|B|` ≈ `sqrt(Bx² + By² + Bz²)`, cadence regularity, etc. Easy to write but pointless without real data.
+- No causal inference, no ML models, no web UI.
 
 ---
 
@@ -48,66 +48,106 @@
 ### Phase 1: Foundation for ML work (current focus)
 
 - [x] Build historical DSCOVR archive ingester (HAPI path)
-- [x] Validate ingester against live CDAWeb HAPI (column order verified; DEC-005)
-- [ ] **Add `pyarrow` and `duckdb` to `requirements.txt`** (per DEC-004)
-- [ ] **Corpus persistence layer** — `src/chronoscope/corpus/storage.py`:
-  - `write_partitioned_parquet(packets, root_dir)` — writes year/month-partitioned Parquet files
-  - `query(sql)` — DuckDB query helper over the partitioned dataset
-  - Filter HAPI fill values (`-1.0E31`) and rows with `DQF != 0` for plasma
+- [x] Validate ingester against live CDAWeb HAPI (DEC-005)
+- [x] Add `pyarrow` and `duckdb` to `requirements.txt`
+- [x] Corpus persistence layer (Parquet writer + DuckDB query helper + filtering)
+- [ ] **Smoke-test storage against real data** (Utsav-side):
+  - Run a one-day archive pull, pipe into `write_partitioned_parquet`, inspect output
+  - Confirm file sizes are sensible, row counts plausible, schema readable
+  - Recommended script outline in the "How to smoke-test" section below
 - [ ] **Bulk-backfill script** — `scripts/build_dscovr_corpus.py`:
   - Walks the date range a month at a time
-  - Persists a JSON checkpoint file after each month
+  - Persists a JSON checkpoint after each month
   - Resumes from checkpoint on restart
-  - Honest progress logging (rows ingested, fill rows dropped, errors)
-- [ ] **Validation-on-corpus** — once built, sanity-check the corpus:
-  - Magnitude `|B|` ≈ `sqrt(Bx² + By² + Bz²)` within tolerance
-  - `bulk_speed_km_s` ≈ `sqrt(Vx² + Vy² + Vz²)` within tolerance
-  - Plasma timestamps cleanly 60s apart, MAG timestamps 1s apart
-- [ ] Cross-reference with NOAA's published space weather event catalogs (G-storm catalog, Kp/Ap index series, Richardson & Cane ICME catalog)
-- [ ] Create labeled training dataset (telemetry windows + known events)
-- [ ] Set up evaluation framework for measuring causal diagnosis accuracy
+  - Honest progress logging (rows ingested, fill/dqf dropped, errors)
+- [ ] **Corpus sanity-check helpers** — `src/chronoscope/corpus/validation.py`:
+  - `|B|` vs `sqrt(Bx² + By² + Bz²)` consistency
+  - Cadence regularity (mag = 1s, plasma = 60s)
+  - Drop-rate sanity (no surprises if fill rate balloons in a given month)
+- [ ] Cross-reference NOAA event catalogs (G-storm, Kp/Ap, Richardson & Cane ICME)
+- [ ] Create labeled training dataset
+- [ ] Set up evaluation framework for causal diagnosis accuracy
 
 ### Phase 2: Initial causal inference
 
-- [ ] Integrate PCMCI library (Tigramite from Max Planck) into ChronoScope
-- [ ] Run initial causal discovery on DSCOVR historical corpus
-- [ ] Validate discovered relationships against known space weather physics
-- [ ] Extend domain model to represent causal graphs as first-class objects
+- [ ] Integrate PCMCI (Tigramite)
+- [ ] Run initial causal discovery on the corpus
+- [ ] Validate against known space weather physics
+- [ ] Causal graphs as first-class domain objects
 
 ### Phase 3: Production integration
 
-- [ ] Hook causal engine into audit chain
-- [ ] Build causal explanation generator (human-readable output)
-- [ ] Add REST API endpoints for causal queries
+- [ ] Causal engine → audit chain
+- [ ] Causal explanation generator
+- [ ] REST API for causal queries
 - [ ] Performance optimization
+
+---
+
+## How to Smoke-Test the Storage Layer (Utsav-side, this/next session)
+
+Quick script you can run from PowerShell once you've pulled this session's changes:
+
+```powershell
+# from repo root
+.venv\Scripts\activate
+pip install -r requirements.txt   # picks up new pyarrow + duckdb
+
+python -c @"
+from datetime import datetime, timezone
+from pathlib import Path
+from src.chronoscope.ingestion.noaa_dscovr_archive import NOAADscovrArchiveIngester
+from src.chronoscope.corpus.storage import write_partitioned_parquet, CorpusReader
+
+# One day from inside the H1_FC coverage window (so we get both MAG and plasma)
+start = datetime(2018, 3, 15, 0, 0, 0, tzinfo=timezone.utc)
+end   = datetime(2018, 3, 16, 0, 0, 0, tzinfo=timezone.utc)
+
+ingester = NOAADscovrArchiveIngester()
+packets = ingester.fetch_packets('DSCOVR', start, end)
+
+root = Path('data/corpus_smoke')
+reports = write_partitioned_parquet(packets, root)
+
+for inst, r in reports.items():
+    print(f'{inst}: seen={r.rows_seen} written={r.rows_written} '
+          f'fill_dropped={r.rows_dropped_fill} dqf_dropped={r.rows_dropped_dqf} '
+          f'drop_rate={r.drop_rate:.1%}')
+
+with CorpusReader(root) as reader:
+    print('mag count :', reader.count('mag'))
+    print('plasma count:', reader.count('plasma'))
+    print('mag time range:', reader.time_range('mag'))
+"@
+```
+
+What "sensible" looks like:
+- **MAG**: 86,400 rows seen (one per second), most written, a small fraction dropped to fill values during data gaps. File size ~1–3 MB per day under zstd.
+- **Plasma**: ~1,440 rows seen (one per minute), most written. File size ~50 KB per day.
+- **Drop rate**: anything under ~10% is plausible. Higher than 50% means there's a major data gap that day, which is real but worth knowing about.
+
+If anything looks weird, paste the output back to me and we debug before building the backfill script on top.
 
 ---
 
 ## Open Questions / Blockers
 
-- ~~**Storage strategy for historical corpus.**~~ Resolved by DEC-004.
-- ~~**HAPI column-order verification.**~~ Resolved by DEC-005.
-- **Post-2019 definitive plasma data.** `DSCOVR_H1_FC` ends 2019-06-27. The NOAA NCEI archive has later data but in a different format (NetCDF, different variable names). Integrating it adds significant scope. Decision deferred — likely DEC-006 once Parquet storage is working and we have a clear picture of how the limited plasma window affects causal-discovery experiments.
-- **ML cofounder timeline.** Causal inference work past prototype stage genuinely needs a domain expert. When do we start recruiting?
-- **Pilot customer pipeline.** Need to start cold outreach to CubeSat programs in parallel with technical work.
+- ~~Storage strategy.~~ Resolved by DEC-004.
+- ~~HAPI column verification.~~ Resolved by DEC-005.
+- **Post-2019 definitive plasma data.** `DSCOVR_H1_FC` ends 2019-06-27. NOAA NCEI has later data in different format. Deferred (likely DEC-006).
+- **ML cofounder timeline.** Same as last session.
+- **Pilot customer pipeline.** Same as last session.
 
 ---
 
 ## Notes for Repo Maintenance
 
-- GitHub repo's "About" blurb still says "246 tests" — should now read "370 tests" via the repo settings web UI.
-- `raw.githubusercontent.com` caches aggressively — when fetching STATUS.md to start a session, the URL can serve stale content for several minutes after a push. If something looks off at session-start, a fresh `git clone` is the source of truth.
+- GitHub "About" blurb still says "246 tests" — should now read "398 tests".
+- `raw.githubusercontent.com` caches aggressively; fresh `git clone` is the source of truth.
 
 ---
 
 ## How To Use This File
 
-**At the START of every session:** Tell Claude "read STATUS.md" and we're caught up.
-
-**At the END of every session:** Claude updates this file with:
-- What was accomplished
-- What's still in progress
-- Any new blockers or open questions
-- Next concrete action
-
-Then commit and push the updated STATUS.md.
+**START of every session:** "read STATUS.md and let's continue."
+**END of every session:** Claude updates STATUS.md, DECISIONS.md, EXPERIMENTS.md as needed. Utsav commits and pushes.
