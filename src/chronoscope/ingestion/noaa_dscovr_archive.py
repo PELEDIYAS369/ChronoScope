@@ -95,19 +95,50 @@ def _to_hapi_time(t: datetime) -> str:
 
 
 def _parse_hapi_time(s: str) -> datetime:
-    """Parse a HAPI ISO 8601 time string to a UTC datetime."""
+    """
+    Parse a HAPI ISO 8601 time string to a UTC datetime.
+
+    HAPI's restricted ISO 8601 allows fractional seconds of arbitrary
+    precision. CDAWeb has been observed to emit nanosecond precision
+    (e.g. ``2018-03-15T00:00:00.000000000Z``, 9 fractional digits) for
+    DSCOVR_H1_FC plasma records, while Python's ``strptime`` ``%f``
+    directive only accepts up to 6. The previous parser rejected every
+    nanosecond-precision row, silently zeroing out plasma ingest.
+
+    This implementation normalises the string and delegates to
+    ``datetime.fromisoformat``, which is permissive enough to handle
+    every form HAPI is allowed to emit.
+
+    Tolerated forms:
+      * ``YYYY-MM-DDTHH:MM:SSZ``                       (no fraction)
+      * ``YYYY-MM-DDTHH:MM:SS.sssZ``                   (milliseconds)
+      * ``YYYY-MM-DDTHH:MM:SS.ssssssZ``                (microseconds)
+      * ``YYYY-MM-DDTHH:MM:SS.sssssssssZ``             (nanoseconds)
+      * Any other fractional-second precision the HAPI spec permits.
+
+    Sub-microsecond precision is truncated (not rounded) because Python's
+    ``datetime`` does not carry it. That is acceptable for DSCOVR: MAG
+    cadence is 1 s and plasma cadence is 1 min, so nanoseconds are noise.
+    """
     s = s.strip()
-    # Accept both with and without fractional seconds
-    # HAPI canonical form is "YYYY-MM-DDTHH:MM:SS.sssZ"
+
+    # Strip trailing ``Z`` so ``fromisoformat`` is happy on Python < 3.11.
+    body = s[:-1] if s.endswith("Z") else s
+
+    # If there are fractional seconds, truncate to microsecond precision.
+    if "." in body:
+        head, frac = body.split(".", 1)
+        frac_digits = frac[:6].ljust(6, "0")
+        body = f"{head}.{frac_digits}"
+
     try:
-        return datetime.strptime(s, _HAPI_TIME_FMT).replace(tzinfo=timezone.utc)
-    except ValueError:
-        pass
-    try:
-        return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        dt = datetime.fromisoformat(body)
     except ValueError as e:
         raise PacketParseError(f"Unrecognized HAPI timestamp: {s!r}", None) from e
 
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 # ---------------------------------------------------------------------------
 # Ingester

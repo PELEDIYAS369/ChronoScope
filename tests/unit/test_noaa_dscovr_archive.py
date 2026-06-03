@@ -115,6 +115,52 @@ class TestHapiTimeHelpers:
         with pytest.raises(PacketParseError):
             _parse_hapi_time("not a timestamp")
 
+    def test_parse_hapi_time_with_nanoseconds(self):
+        # Regression: CDAWeb emits DSCOVR_H1_FC timestamps with 9 fractional
+        # digits (nanoseconds). strptime %f only accepts 6, so the original
+        # parser raised on every plasma row and silently zeroed plasma ingest.
+        t = _parse_hapi_time('2018-03-15T00:00:00.000000000Z')
+        assert t == datetime(2018, 3, 15, 0, 0, 0, tzinfo=timezone.utc)
+
+    def test_parse_hapi_time_nanoseconds_with_nonzero_fraction(self):
+        # 123456789 ns -> 123456 us (truncated, not rounded).
+        t = _parse_hapi_time('2018-03-15T12:34:56.123456789Z')
+        assert t == datetime(2018, 3, 15, 12, 34, 56, 123456, tzinfo=timezone.utc)
+
+    def test_parse_hapi_time_microseconds(self):
+        t = _parse_hapi_time('2018-03-15T12:34:56.123456Z')
+        assert t == datetime(2018, 3, 15, 12, 34, 56, 123456, tzinfo=timezone.utc)
+
+    def test_parse_hapi_time_returns_utc_aware(self):
+        t = _parse_hapi_time('2018-03-15T00:00:00.000000000Z')
+        assert t.tzinfo is not None
+        assert t.utcoffset().total_seconds() == 0
+
+
+    def test_parse_hapi_time_nanoseconds_with_nonzero_fraction(self):
+        """
+        Nanosecond precision with a nonzero fractional part: the first 6
+        digits (microseconds) are kept, digits beyond are truncated (not
+        rounded). 123456789 ns -> 123456 us.
+        """
+        t = _parse_hapi_time("2018-03-15T12:34:56.123456789Z")
+        assert t == datetime(
+            2018, 3, 15, 12, 34, 56, 123456, tzinfo=timezone.utc
+        )
+
+    def test_parse_hapi_time_microseconds(self):
+        """Six fractional digits (microseconds) must parse exactly."""
+        t = _parse_hapi_time("2018-03-15T12:34:56.123456Z")
+        assert t == datetime(
+            2018, 3, 15, 12, 34, 56, 123456, tzinfo=timezone.utc
+        )
+
+    def test_parse_hapi_time_returns_utc_aware(self):
+        """Parsed timestamps must always be UTC-aware, never naive."""
+        t = _parse_hapi_time("2018-03-15T00:00:00.000000000Z")
+        assert t.tzinfo is not None
+        assert t.utcoffset().total_seconds() == 0
+
 
 # ---------------------------------------------------------------------------
 # Plasma (DSCOVR_H1_FC) ingestion
