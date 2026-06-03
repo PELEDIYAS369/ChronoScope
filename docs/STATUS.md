@@ -1,7 +1,7 @@
 # ChronoScope — Current Status
 
-**Last updated:** 2026-05-26
-**Last session:** Corpus persistence layer (Parquet + DuckDB)
+**Last updated:** 2026-06-03
+**Last session:** Plasma nanosecond-timestamp parser fix; storage verified end-to-end
 
 ---
 
@@ -10,7 +10,7 @@
 **Phase:** Phase 1 of causal-diagnosis engine — foundation for ML work.
 
 **Codebase health:**
-- 398 tests passing (was 370; +28 new for the corpus storage layer)
+- 402 tests passing (was 398; +4 regression tests for nanosecond timestamp parsing)
 - HAPI ingester column mapping verified (DEC-005)
 - Corpus storage layer implemented and unit-tested (DEC-004 partially executed)
 - `pyarrow==24.0.0` and `duckdb==1.5.3` added to `requirements.txt`
@@ -35,7 +35,7 @@
 
 ## What's NOT Working / Missing
 
-- **Storage layer is unit-tested but not yet exercised against real DSCOVR data.** All 28 new tests use packets constructed in-process; no real HAPI fetch has fed into the writer yet. Validating with one day of real data is the immediate next step for Utsav.
+- ~~Storage layer not yet exercised against real DSCOVR data.~~ DONE 2026-06-03: smoke-tested against real CDAWeb data for 2018-03-15. MAG 86,378 rows written (22 fill-dropped), plasma 1,440 rows written (0 dropped), both round-trip cleanly via CorpusReader. This surfaced and fixed the plasma nanosecond-timestamp bug (see below).
 - **No bulk-backfill script** — single ingest → write works; multi-year orchestration with resumable checkpoints does not exist yet. This is the next thing to build.
 - **No post-2019 plasma source** — `DSCOVR_H1_FC` ends 2019-06-27. Deferred (likely DEC-006).
 - **No corpus-level sanity checks** — once real data is in the corpus, we need to verify physics consistency: `|B|` ≈ `sqrt(Bx² + By² + Bz²)`, cadence regularity, etc. Easy to write but pointless without real data.
@@ -51,10 +51,11 @@
 - [x] Validate ingester against live CDAWeb HAPI (DEC-005)
 - [x] Add `pyarrow` and `duckdb` to `requirements.txt`
 - [x] Corpus persistence layer (Parquet writer + DuckDB query helper + filtering)
-- [ ] **Smoke-test storage against real data** (Utsav-side):
-  - Run a one-day archive pull, pipe into `write_partitioned_parquet`, inspect output
-  - Confirm file sizes are sensible, row counts plausible, schema readable
-  - Recommended script outline in the "How to smoke-test" section below
+- [x] **Smoke-test storage against real data** (DONE 2026-06-03):
+  - Pulled 2018-03-15 (inside H1_FC window), piped into `write_partitioned_parquet`
+  - MAG: 86,400 seen / 86,378 written / 22 fill-dropped / 0.0% drop. File 5.7 MB.
+  - Plasma: 1,440 seen / 1,440 written / 0 dropped / 0.0% drop. File 81 KB.
+  - **Found + fixed plasma nanosecond-timestamp bug** (commit fec9770): CDAWeb emits 9-digit fractional seconds; strptime %f caps at 6, so every plasma row was silently dropped. Rewrote `_parse_hapi_time` via fromisoformat + truncation. 4 regression tests added.
 - [ ] **Bulk-backfill script** — `scripts/build_dscovr_corpus.py`:
   - Walks the date range a month at a time
   - Persists a JSON checkpoint after each month
@@ -142,7 +143,7 @@ If anything looks weird, paste the output back to me and we debug before buildin
 
 ## Notes for Repo Maintenance
 
-- GitHub "About" blurb still says "246 tests" — should now read "398 tests".
+- GitHub "About" blurb still says "246 tests" — should now read "402 tests".
 - `raw.githubusercontent.com` caches aggressively; fresh `git clone` is the source of truth.
 
 ---
