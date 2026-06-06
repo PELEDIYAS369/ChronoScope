@@ -6,6 +6,45 @@ Format: most recent decisions at the top.
 
 ---
 
+## DEC-006: Defer post-2019 definitive plasma to NOAA NCEI; corpus plasma stops at 2019-06-27
+
+**Date:** 2026-06-06
+**Status:** Accepted
+
+**Context:** The CDAWeb HAPI plasma dataset DSCOVR_H1_FC was not updated past
+2019-06-27 (the dataset effectively froze after the DSCOVR safe-mode incident).
+The 1-second magnetometer dataset DSCOVR_H0_MAG is unaffected and runs to the
+present. The 2026-06-06 backfill therefore produced a corpus with MAG coverage
+2016-07-27 -> present (~271M rows) but plasma only through mid-2019 (~1.38M
+rows). Post-2019 definitive plasma exists, but in a different product/format at
+NOAA NCEI, not via the same HAPI endpoint.
+
+**Decision:** Accept the asymmetric corpus as-is for now. MAG runs full-length;
+plasma stops at 2019-06-27. Do NOT block Phase 2 causal work on acquiring
+post-2019 plasma. The ingester already short-circuits plasma requests past the
+H1_FC end date and logs a clear warning, so this is explicit, not silent.
+
+**Alternatives considered:**
+- Ingest NOAA NCEI post-2019 plasma now: rejected for this phase — different
+  format/endpoint, real integration cost, and the 2016-2019 plasma+MAG window
+  is already enough to develop and validate the causal pipeline.
+- Drop plasma entirely and go MAG-only: rejected — the 2016-2019 joined
+  plasma+MAG window is the richest part of the corpus for causal discovery.
+
+**Reasoning:** The ~3-year overlapping plasma+MAG window spans real storms
+(incl. the validated Sept 2017 G4 event, EXP-001) — sufficient to build labeled
+datasets and run/validate causal discovery. Post-2019 plasma is an enhancement,
+not a prerequisite.
+
+**Consequences:**
+- Any analysis requiring BOTH plasma and MAG is limited to 2016-07-27 ->
+  2019-06-27 until NCEI ingestion is built.
+- MAG-only analyses (and MAG-only anomaly windows) can use the full ~10 years.
+- A future NCEI plasma ingester would extend the joined window; tracked as a
+  follow-on, not scheduled.
+
+---
+
 ## DEC-005: HAPI column-order verification + DSCOVR_H1_FC end-date acknowledgement
 
 **Date:** 2026-05-26
