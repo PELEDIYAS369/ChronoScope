@@ -11,6 +11,60 @@ Format: most recent experiments at the top. Number them sequentially
 
 ---
 
+## EXP-002: Whole-corpus data-quality validation + density cleanup
+
+**Date:** 2026-06-06
+**Status:** Complete -- PASS (after remediation)
+
+**Question:** Is the ENTIRE corpus physically trustworthy, not just the one
+storm spot-checked in EXP-001? (Precondition for causal work.)
+
+**Setup:**
+- Built src/chronoscope/corpus/validation.py: four checks over the full corpus
+  -- coverage (per-day rows vs theoretical max), b_field_consistency (stored
+  |B| vs sqrt(Bx2+By2+Bz2)), physical_ranges (values vs generous bounds), and
+  optional precise cadence on one day. Console + JSON report, CI-style exit code.
+- Ran against E:\chronoscope_corpus (271.4M MAG, 1.38M plasma).
+
+**Initial results:**
+- coverage PASS -- MAG avg 97.2% (2,711/3,233 days >=95%, 19 days <50%);
+  plasma avg 90.6%. Sparse days are real gaps, reported not failed.
+- b_field_consistency PASS -- across all 271M MAG rows, only 4,655 (0.0017%)
+  exceed tolerance; max discrepancy 13.4 nT on a handful of rows. The DEC-005
+  column mapping holds corpus-wide. (Confirms EXP-001's 4-dp agreement at scale.)
+- cadence (2017-09-07) PASS -- MAG median 1s / 100% at cadence; plasma median 60s.
+- physical_ranges FAIL -- 647 plasma proton_density rows out of bounds.
+
+**Diagnosis of the failure:** 636 negative densities (min -82.3 cm^-3) and 11
+absurd highs (max 3.57e10 cm^-3). All non-fill (not -1e31) and all DQF=0, so
+they bypassed the fill and DQF gates -- genuine source-level corruption.
+Clustered on storm-active days (late May 2018, Oct 2018, May 2019). MAG clean.
+
+**Fix (see DEC-007):** Added a physical-plausibility gate to the storage layer
+(third tier alongside fill/DQF) and remediated the existing corpus in place with
+scripts/clean_corpus_plausibility.py -- 647 rows removed across 83 files, no
+re-fetch. Density valid range [0, 200] cm^-3.
+
+**Result after fix:** Re-ran validation. ALL CHECKS PASSED. Plasma rows
+1,382,215 -> 1,381,568. physical_ranges: all quantities within bounds.
+
+**Interpretation:** The corpus is now trustworthy both on disk and
+by-construction. The validation layer earned its keep on day one -- it found
+647 corrupt, flagged-good, non-fill rows hiding in 1.38M that the EXP-001 spot
+check could never have surfaced, and which would have quietly poisoned any
+correlation/causal analysis (a single 3.5e10 spike wrecks a covariance).
+
+**Implications / next:**
+- Phase 1 data-quality story is closed. Corpus ready for event labeling + PCMCI.
+- 409 tests (7 new pin the plausibility gate).
+
+**Reproducibility:**
+- python src/chronoscope/corpus/validation.py --root <corpus> --report corpus_validation.json
+- python scripts/clean_corpus_plausibility.py --root <corpus> [--dry-run]
+- Report artifact: corpus_validation.json (local, not committed).
+
+---
+
 ## EXP-001: Corpus validation against the September 2017 G4 storm
 
 **Date:** 2026-06-06

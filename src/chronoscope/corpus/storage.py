@@ -65,6 +65,33 @@ logger = structlog.get_logger(__name__)
 # float, not an approximation.
 HAPI_FILL_SENTINEL = -1.0e31
 
+# Physical-plausibility bounds (DEC-007). A third filter tier alongside the
+# fill-value and DQF gates: rows whose physical quantities fall outside these
+# generous bounds are dropped at the storage boundary so they never enter the
+# corpus. These catch source-level corruption that is NOT a fill value and is
+# flagged "good" (DQF=0) — e.g. negative proton densities and absurd spikes
+# (observed up to 3.5e10 cm^-3) that whole-corpus validation surfaced.
+#
+# Bounds are deliberately generous: wide enough that no physically real L1
+# solar-wind / IMF measurement is ever clipped, tight enough to reject
+# garbage. See validation.py for the same bounds used in read-side checks.
+# Mapping: column -> (min_inclusive, max_inclusive).
+PHYSICAL_BOUNDS: dict[str, tuple[float, float]] = {
+    # MAG (nT). Real |B| at L1 is single digits when quiet, <100 in extreme
+    # storms; components rarely exceed a few tens. 500 is far past any real value.
+    "bt_nt": (0.0, 500.0),
+    "bx_gse_nt": (-500.0, 500.0),
+    "by_gse_nt": (-500.0, 500.0),
+    "bz_gse_nt": (-500.0, 500.0),
+    # Plasma. Density never realistically exceeds ~100 cm^-3 even in the
+    # densest CME sheaths; 200 leaves generous headroom. Negative = impossible.
+    "proton_density_n_cc": (0.0, 200.0),
+    # Solar-wind bulk speed: slow ~300, fast streams <1000 km/s. Sane band.
+    "bulk_speed_km_s": (150.0, 1500.0),
+    # Proton temperature is positive; 1e8 K is orders of magnitude above real.
+    "ion_temperature_k": (0.0, 1.0e8),
+}
+
 # Parquet compression. zstd is the modern default — better ratio than snappy
 # at comparable speed, and pyarrow ships with it.
 PARQUET_COMPRESSION = "zstd"
@@ -115,6 +142,7 @@ class WriteReport:
     rows_written: int = 0
     rows_dropped_fill: int = 0
     rows_dropped_dqf: int = 0
+    rows_dropped_implausible: int = 0
     rows_dropped_other: int = 0
     files_written: list[Path] = field(default_factory=list)
 
@@ -223,6 +251,41 @@ def _has_bad_dqf(packet: TelemetryPacket) -> bool:
     return dqf != 0
 
 
+def _has_implausible_value(
+    packet: TelemetryPacket, param_keys: Sequence[str]
+) -> bool:
+    """
+    Return True if any listed parameter falls outside its physical bounds
+    (DEC-007). Only checks keys that appear in PHYSICAL_BOUNDS; other keys
+    (e.g. velocity components, thermal speed) are left to the fill/DQF gates.
+
+    Fill sentinels and NaN are intentionally NOT this gate's job — they're
+    handled by _has_fill_value, which runs first. This gate exists for
+    finite, DQF-good, non-fill values that are nonetheless physically
+    impossible (negative density, 3.5e10 cm^-3 spikes, etc.).
+    """
+    for key in param_keys:
+        bounds = PHYSICAL_BOUNDS.get(key)
+        if bounds is None:
+            continue
+        v = packet.parameters.get(key)
+        if v is None:
+            continue
+        if not isinstance(v, (int, float)):
+            continue
+        try:
+            fv = float(v)
+        except (TypeError, ValueError):
+            continue
+        if math.isnan(fv):
+            # Leave NaN to the fill gate; don't double-count here.
+            continue
+        lo, hi = bounds
+        if fv < lo or fv > hi:
+            return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Per-instrument batching
 # ---------------------------------------------------------------------------
@@ -297,6 +360,7 @@ def write_partitioned_parquet(
     *,
     apply_fill_filter: bool = True,
     apply_dqf_filter: bool = True,
+    apply_plausibility_filter: bool = True,
 ) -> dict[str, WriteReport]:
     """
     Persist packets as partitioned Parquet under `root`.
@@ -306,6 +370,8 @@ def write_partitioned_parquet(
         Unrecognized packets are counted under `rows_dropped_other` and skipped.
       * Fill-value rows are dropped if `apply_fill_filter` (default True).
       * Plasma rows with bad DQF are dropped if `apply_dqf_filter` (default True).
+      * Rows with physically implausible values are dropped if
+        `apply_plausibility_filter` (default True) — see PHYSICAL_BOUNDS / DEC-007.
       * Surviving rows are bucketed by (year, month) of their timestamp and
         each bucket is written as a single Parquet file. Filename encodes the
         timestamp range: `part-{first_ts}-{last_ts}.parquet`.
@@ -338,6 +404,11 @@ def write_partitioned_parquet(
             if apply_fill_filter and _has_fill_value(packet, MAG_PARAMETER_KEYS):
                 mag_report.rows_dropped_fill += 1
                 continue
+            if apply_plausibility_filter and _has_implausible_value(
+                packet, MAG_PARAMETER_KEYS
+            ):
+                mag_report.rows_dropped_implausible += 1
+                continue
             mag_rows.append(_packet_to_row(packet, MAG_PARAMETER_KEYS))
         else:  # plasma
             plasma_report.rows_seen += 1
@@ -348,6 +419,11 @@ def write_partitioned_parquet(
                 continue
             if apply_dqf_filter and _has_bad_dqf(packet):
                 plasma_report.rows_dropped_dqf += 1
+                continue
+            if apply_plausibility_filter and _has_implausible_value(
+                packet, PLASMA_PARAMETER_KEYS
+            ):
+                plasma_report.rows_dropped_implausible += 1
                 continue
             plasma_rows.append(_packet_to_row(packet, PLASMA_PARAMETER_KEYS))
 
@@ -370,9 +446,11 @@ def write_partitioned_parquet(
         "corpus_write_complete",
         mag_written=mag_report.rows_written,
         mag_dropped_fill=mag_report.rows_dropped_fill,
+        mag_dropped_implausible=mag_report.rows_dropped_implausible,
         plasma_written=plasma_report.rows_written,
         plasma_dropped_fill=plasma_report.rows_dropped_fill,
         plasma_dropped_dqf=plasma_report.rows_dropped_dqf,
+        plasma_dropped_implausible=plasma_report.rows_dropped_implausible,
         unclassified_packets=unclassified_count,
         files=len(mag_report.files_written) + len(plasma_report.files_written),
     )

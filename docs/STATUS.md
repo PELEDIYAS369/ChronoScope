@@ -1,7 +1,7 @@
 # ChronoScope — Current Status
 
 **Last updated:** 2026-06-06
-**Last session:** Full 10-year DSCOVR corpus backfilled + validated against the Sept 2017 G4 storm
+**Last session:** Whole-corpus validation (validation.py) + density plausibility gate (DEC-007); corpus fully clean
 
 ---
 
@@ -10,7 +10,7 @@
 **Phase:** Phase 1 of causal-diagnosis engine — foundation for ML work.
 
 **Codebase health:**
-- 402 tests passing (was 398; +4 regression tests for nanosecond timestamp parsing)
+- 409 tests passing (was 402; +7 for the DEC-007 physical-plausibility gate)
 - HAPI ingester column mapping verified (DEC-005)
 - Corpus storage layer implemented, unit-tested, AND populated with real data (DEC-004 fully executed)
 - **Historical DSCOVR corpus built: 271.4M MAG rows + 1.38M plasma rows across 3,601 days (2016-07-27 -> 2026-06-05), zero failed days**
@@ -40,7 +40,7 @@
 - ~~Storage layer not yet exercised against real DSCOVR data.~~ DONE 2026-06-03: smoke-tested against real CDAWeb data for 2018-03-15. MAG 86,378 rows written (22 fill-dropped), plasma 1,440 rows written (0 dropped), both round-trip cleanly via CorpusReader. This surfaced and fixed the plasma nanosecond-timestamp bug (see below).
 - ~~No bulk-backfill script.~~ DONE 2026-06-06: `scripts/build_dscovr_corpus.py` (commit 9d773a2), daily chunking, resumable per-day checkpoint. Ran the full window clean: 3,601 days, 0 failures.
 - **No post-2019 plasma source** — `DSCOVR_H1_FC` ends 2019-06-27; corpus plasma stops there. Now formalized in DEC-006 (deferred to NOAA NCEI).
-- **No PACKAGED corpus-level sanity checks** — a one-off |B| consistency check passed during the Sept 2017 validation (stored Bt vs sqrt(Bx²+By²+Bz²) agreed to 4 dp), but it is not yet a reusable module. `src/chronoscope/corpus/validation.py` still to be written.
+- ~~No packaged corpus sanity checks.~~ DONE 2026-06-06: `src/chronoscope/corpus/validation.py` runs coverage / |B|-consistency / physical-range checks over the whole corpus (console + JSON, CI exit code). It found 647 implausible plasma density rows; fixed via DEC-007 gate + in-place cleanup. Corpus now passes ALL checks.
 - No causal inference, no ML models, no web UI.
 
 ---
@@ -67,11 +67,14 @@
   - Tail (~last 2 weeks) writes zero rows: definitive data lags real-time, HAPI
     returns a 1201 'no data' status. Cosmetic TODO: skip that status quietly
     instead of emitting magnetic_parse_failed warnings on the header lines.
-- [~] **Corpus sanity-check helpers** — `src/chronoscope/corpus/validation.py` (PARTIAL):
-  - `|B|` vs `sqrt(Bx² + By² + Bz²)` consistency — verified once by hand on the
-    Sept 2017 window (34.51962 vs 34.519197). Still needs packaging into a module.
-  - Cadence regularity (mag = 1s, plasma = 60s) — not yet written
-  - Drop-rate sanity (per-month fill-rate watch) — not yet written
+- [x] **Corpus sanity-check helpers** — `src/chronoscope/corpus/validation.py` (DONE 2026-06-06):
+  - coverage (per-day rows vs theoretical max), b_field_consistency (|B| vs
+    components, whole corpus), physical_ranges (DEC-007 bounds), optional
+    precise cadence on one day. Console summary + JSON report + CI exit code.
+  - Found 647 implausible plasma density rows (EXP-002); fixed via DEC-007
+    storage gate + scripts/clean_corpus_plausibility.py (in-place, no re-fetch).
+  - Corpus now PASSES all checks. Plasma 1,382,215 -> 1,381,568 after cleanup.
+  - Run: python src/chronoscope/corpus/validation.py --root E:\chronoscope_corpus --report corpus_validation.json
 - [x] **Validate corpus against ground truth (EXP-001, 2026-06-06):** queried the
   Sept 7-8 2017 G4 storm. Measured min Bz_GSE -33.99 nT, max |B| 34.52 nT, max
   speed 860 km/s vs published DSCOVR record (Bz ~-32.9 GSM, |B| ~34 nT, speed
@@ -154,7 +157,7 @@ If anything looks weird, paste the output back to me and we debug before buildin
 
 ## Notes for Repo Maintenance
 
-- GitHub "About" blurb still says "246 tests" — should now read "402 tests".
+- GitHub "About" blurb still says "246 tests" — should now read "409 tests".
 - Corpus is local only, NOT committed (~17 GB of Parquet). Moved off the full C: drive on 2026-06-06; now lives at `E:\chronoscope_corpus` on Utsav's machine. All backfill/query commands must pass `--root E:\chronoscope_corpus`. The per-day checkpoint moved with it, so re-running resumes (shows already_completed=3601, days_to_process=0). Rebuild from scratch on any machine with `python scripts/build_dscovr_corpus.py --root <path>`.
 - `raw.githubusercontent.com` caches aggressively; fresh `git clone` is the source of truth.
 

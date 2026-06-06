@@ -6,6 +6,54 @@ Format: most recent decisions at the top.
 
 ---
 
+## DEC-007: Physical-plausibility filter as a third storage-layer gate
+
+**Date:** 2026-06-06
+**Status:** Accepted
+
+**Context:** Whole-corpus validation (validation.py / EXP-002) found 647 plasma
+rows with physically impossible proton_density_n_cc values: 636 negative (down
+to -82.3 cm^-3) and 11 absurdly high (up to 3.57e10 cm^-3). These were NOT fill
+values (-1e31) and were flagged data-quality-good (DQF=0), so the existing
+fill-value and DQF gates did not catch them -- they are genuine source-level
+corruption. 647 of 1.38M plasma rows (0.047%); MAG (271M rows) was clean.
+
+**Decision:** Add a physical-plausibility filter as a THIRD gate in the storage
+layer (write_partitioned_parquet), alongside the fill-value and DQF gates.
+Rows whose physical quantities fall outside generous bounds (PHYSICAL_BOUNDS in
+storage.py) are dropped at write time and never enter the corpus. Bounds:
+  - proton_density_n_cc: [0, 200] cm^-3   (real L1 <100 even in extreme sheaths)
+  - bulk_speed_km_s:     [150, 1500] km/s
+  - ion_temperature_k:   [0, 1e8] K
+  - bt_nt / b*_gse_nt:   [0,500] / [-500,500] nT
+The filter is on by default (apply_plausibility_filter=True) and can be disabled
+for raw data exploration. The existing corpus was remediated in place by
+scripts/clean_corpus_plausibility.py (same bounds, imported from storage.py so
+they cannot drift) -- 647 rows removed, no CDAWeb re-fetch needed.
+
+**Alternatives considered:**
+- Read-side filtering only (each consumer excludes bad rows): rejected -- pushes
+  the problem downstream and every consumer must remember to filter. Corpus
+  should be trustworthy as stored.
+- Widen validation bounds until the check passes: rejected -- that hides
+  corruption rather than removing it.
+- Re-fetch the whole corpus with the new gate: rejected -- 10+ hours for no
+  benefit over an in-place rewrite of 83 affected files.
+
+**Bound rationale:** 200 cm^-3 for density catches 100% of the garbage (bad
+positives were all >=500 except one at ~250) while never clipping a real
+measurement (L1 density essentially never exceeds ~100). Tightening to 100 would
+clip rare-but-real high-density events for zero additional garbage caught.
+
+**Consequences:**
+- Corpus is clean-by-construction for all future backfills.
+- A small number of legitimate-but-extreme readings could in principle be
+  clipped, but the bounds are set well beyond any physically real value.
+- WriteReport now carries rows_dropped_implausible. 7 new unit tests pin the
+  gate's behavior (409 tests total).
+
+---
+
 ## DEC-006: Defer post-2019 definitive plasma to NOAA NCEI; corpus plasma stops at 2019-06-27
 
 **Date:** 2026-06-06

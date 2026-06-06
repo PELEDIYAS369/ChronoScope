@@ -274,7 +274,12 @@ class TestFillValueFilter:
         assert report.rows_dropped_fill == 1
 
     def test_fill_filter_can_be_disabled(self, tmp_path):
-        """For data-exploration callers who want to see raw fill rates."""
+        """For data-exploration callers who want to see raw fill rates.
+
+        Note: the fill sentinel (-1e31) is ALSO outside the physical bounds,
+        so to get true raw passthrough we must disable the plausibility
+        filter too (DEC-007). This test isolates the fill-filter toggle.
+        """
         good = _make_mag_packet(
             datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
         )
@@ -283,12 +288,16 @@ class TestFillValueFilter:
             bz=HAPI_FILL_SENTINEL,
         )
         reports = write_partitioned_parquet(
-            [good, bad], tmp_path, apply_fill_filter=False
+            [good, bad],
+            tmp_path,
+            apply_fill_filter=False,
+            apply_plausibility_filter=False,
         )
         report = reports[INSTRUMENT_MAG]
-        # Both written when filter disabled
+        # Both written when both filters disabled
         assert report.rows_written == 2
         assert report.rows_dropped_fill == 0
+        assert report.rows_dropped_implausible == 0
 
     def test_nan_treated_as_fill(self, tmp_path):
         """NaN shouldn't appear in clean data, but if it does, drop it."""
@@ -333,6 +342,97 @@ class TestDqfFilter:
             [bad], tmp_path, apply_dqf_filter=False,
         )
         assert reports[INSTRUMENT_PLASMA].rows_written == 1
+
+
+# ---------------------------------------------------------------------------
+# Physical-plausibility filter (DEC-007)
+# ---------------------------------------------------------------------------
+
+
+class TestPlausibilityFilter:
+
+    def test_negative_density_dropped(self, tmp_path):
+        """Negative proton density is physically impossible -> dropped."""
+        good = _make_plasma_packet(
+            datetime(2018, 3, 15, 12, 0, 0, tzinfo=timezone.utc), density=5.2
+        )
+        bad = _make_plasma_packet(
+            datetime(2018, 3, 15, 12, 1, 0, tzinfo=timezone.utc), density=-82.3
+        )
+        reports = write_partitioned_parquet([good, bad], tmp_path)
+        p = reports[INSTRUMENT_PLASMA]
+        assert p.rows_seen == 2
+        assert p.rows_written == 1
+        assert p.rows_dropped_implausible == 1
+
+    def test_absurd_density_spike_dropped(self, tmp_path):
+        """A 3.5e10 cm^-3 spike (real corpus garbage) -> dropped."""
+        good = _make_plasma_packet(
+            datetime(2018, 3, 15, 12, 0, 0, tzinfo=timezone.utc), density=5.2
+        )
+        bad = _make_plasma_packet(
+            datetime(2018, 3, 15, 12, 1, 0, tzinfo=timezone.utc),
+            density=3.5727e10,
+        )
+        reports = write_partitioned_parquet([good, bad], tmp_path)
+        p = reports[INSTRUMENT_PLASMA]
+        assert p.rows_written == 1
+        assert p.rows_dropped_implausible == 1
+
+    def test_high_but_valid_density_kept(self, tmp_path):
+        """150 cm^-3 is high but within the generous 200 bound -> kept."""
+        pkt = _make_plasma_packet(
+            datetime(2018, 3, 15, 12, 0, 0, tzinfo=timezone.utc), density=150.0
+        )
+        reports = write_partitioned_parquet([pkt], tmp_path)
+        p = reports[INSTRUMENT_PLASMA]
+        assert p.rows_written == 1
+        assert p.rows_dropped_implausible == 0
+
+    def test_density_just_over_bound_dropped(self, tmp_path):
+        """250 cm^-3 exceeds the 200 ceiling -> dropped."""
+        pkt = _make_plasma_packet(
+            datetime(2018, 3, 15, 12, 0, 0, tzinfo=timezone.utc), density=250.0
+        )
+        reports = write_partitioned_parquet([pkt], tmp_path)
+        p = reports[INSTRUMENT_PLASMA]
+        assert p.rows_written == 0
+        assert p.rows_dropped_implausible == 1
+
+    def test_implausible_speed_dropped(self, tmp_path):
+        """Bulk speed outside [150,1500] km/s -> dropped."""
+        # vx chosen so the magnitude is ~2000 km/s, well past the ceiling.
+        pkt = _make_plasma_packet(
+            datetime(2018, 3, 15, 12, 0, 0, tzinfo=timezone.utc),
+            vx=-2000.0, vy=0.0, vz=0.0,
+        )
+        reports = write_partitioned_parquet([pkt], tmp_path)
+        p = reports[INSTRUMENT_PLASMA]
+        assert p.rows_written == 0
+        assert p.rows_dropped_implausible == 1
+
+    def test_plausibility_filter_can_be_disabled(self, tmp_path):
+        """Exploration callers can opt out and see raw values."""
+        bad = _make_plasma_packet(
+            datetime(2018, 3, 15, 12, 0, 0, tzinfo=timezone.utc),
+            density=3.5727e10,
+        )
+        reports = write_partitioned_parquet(
+            [bad], tmp_path, apply_plausibility_filter=False
+        )
+        p = reports[INSTRUMENT_PLASMA]
+        assert p.rows_written == 1
+        assert p.rows_dropped_implausible == 0
+
+    def test_mag_implausible_component_dropped(self, tmp_path):
+        """A MAG component outside +/-500 nT -> dropped."""
+        pkt = _make_mag_packet(
+            datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc), bz=9999.0
+        )
+        reports = write_partitioned_parquet([pkt], tmp_path)
+        m = reports[INSTRUMENT_MAG]
+        assert m.rows_written == 0
+        assert m.rows_dropped_implausible == 1
 
 
 # ---------------------------------------------------------------------------
