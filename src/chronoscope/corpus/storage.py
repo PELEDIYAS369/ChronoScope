@@ -100,6 +100,12 @@ PARQUET_COMPRESSION = "zstd"
 INSTRUMENT_MAG = "mag"
 INSTRUMENT_PLASMA = "plasma"
 
+# Label views (DEC-008). Labels live in a sibling `labels/` tree and are
+# registered as additional DuckDB views when present, so callers can join
+# them to telemetry in one query. The corpus layer owns the corpus layout.
+VIEW_KP = "kp"
+LABELS_KP_AP_RELPATH = Path("labels") / "geomagnetic" / "kp_ap.parquet"
+
 # Parameter keys carried per instrument. These mirror what the archive
 # ingester writes (DEC-005). Listed explicitly here so the Parquet schema
 # is stable and discoverable; adding a new parameter requires updating
@@ -524,6 +530,7 @@ class CorpusReader:
         self.root = Path(root)
         self._conn = duckdb.connect(":memory:")
         self._register_views()
+        self._register_label_views()
 
     def _register_views(self) -> None:
         """
@@ -570,6 +577,41 @@ class CorpusReader:
                     f"CREATE OR REPLACE VIEW {instrument} AS "
                     f"SELECT * FROM _empty_{instrument}"
                 )
+
+    def _register_label_views(self) -> None:
+        """
+        Register label views (currently `kp`) when their files exist under
+        the sibling `labels/` tree. Unlike the telemetry views, a missing
+        label file registers NO view — querying `kp` on a corpus without
+        labels raises a clear "table does not exist", which is informative.
+
+        The `kp` view is a 3-hourly geomagnetic series (timestamp = start of
+        each interval). To attach the prevailing Kp/g_scale to each telemetry
+        row, use an ASOF join on the interval start, e.g.:
+
+            SELECT m.timestamp, m.bz_gse_nt, k.kp, k.g_scale
+            FROM mag m
+            ASOF LEFT JOIN kp k ON m.timestamp >= k.timestamp
+
+        or select telemetry within storm intervals:
+
+            SELECT p.* FROM plasma p
+            ASOF LEFT JOIN kp k ON p.timestamp >= k.timestamp
+            WHERE k.g_scale >= 4
+        """
+        kp_path = self.root / LABELS_KP_AP_RELPATH
+        if kp_path.exists():
+            path_str = str(kp_path).replace("\\", "/")
+            self._conn.execute(
+                f"""
+                CREATE OR REPLACE VIEW {VIEW_KP} AS
+                SELECT * FROM read_parquet('{path_str}')
+                """
+            )
+
+    def has_labels(self) -> bool:
+        """True if the geomagnetic `kp` label view is registered."""
+        return (self.root / LABELS_KP_AP_RELPATH).exists()
 
     def query(self, sql: str) -> list[tuple]:
         """Run a raw SQL query against the corpus. Returns row tuples."""

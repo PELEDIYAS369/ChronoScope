@@ -1,7 +1,7 @@
 # ChronoScope — Current Status
 
 **Last updated:** 2026-06-06
-**Last session:** Whole-corpus validation (validation.py) + density plausibility gate (DEC-007); corpus fully clean
+**Last session:** Geomagnetic (Kp/ap) labels built + validated vs Sept 2017 G4 and May 2024 G5 storms (EXP-003, DEC-008)
 
 ---
 
@@ -10,7 +10,7 @@
 **Phase:** Phase 1 of causal-diagnosis engine — foundation for ML work.
 
 **Codebase health:**
-- 409 tests passing (was 402; +7 for the DEC-007 physical-plausibility gate)
+- 437 tests passing (was 409; +24 geomagnetic labels, +4 CorpusReader label-view)
 - HAPI ingester column mapping verified (DEC-005)
 - Corpus storage layer implemented, unit-tested, AND populated with real data (DEC-004 fully executed)
 - **Historical DSCOVR corpus built: 271.4M MAG rows + 1.38M plasma rows across 3,601 days (2016-07-27 -> 2026-06-05), zero failed days**
@@ -79,7 +79,13 @@
   Sept 7-8 2017 G4 storm. Measured min Bz_GSE -33.99 nT, max |B| 34.52 nT, max
   speed 860 km/s vs published DSCOVR record (Bz ~-32.9 GSM, |B| ~34 nT, speed
   ~700+ km/s). Quiet day 2017-09-01 showed max |B| 11 nT. Corpus is faithful.
-- [ ] Cross-reference NOAA event catalogs (G-storm, Kp/Ap, Richardson & Cane ICME)
+- [~] Cross-reference NOAA event catalogs (G-storm, Kp/Ap, Richardson & Cane ICME):
+  - [x] **Kp/ap geomagnetic labels** (DONE 2026-06-06, DEC-008/EXP-003):
+    src/chronoscope/labels/geomagnetic.py fetches GFZ Kp+ap, derives G-scale,
+    writes labels/geomagnetic/kp_ap.parquet. CorpusReader registers a `kp` view;
+    join via ASOF. Validated: Sept 2017 -> G4, corpus-max Kp 9.0 = May 2024 G5.
+    G-storm scale is derived from Kp (not a separate source).
+  - [ ] Richardson & Cane ICME catalog (HTML-table parse -> labels/icme/) -- NEXT
 - [ ] Create labeled training dataset
 - [ ] Set up evaluation framework for causal diagnosis accuracy
 
@@ -157,7 +163,7 @@ If anything looks weird, paste the output back to me and we debug before buildin
 
 ## Notes for Repo Maintenance
 
-- GitHub "About" blurb still says "246 tests" — should now read "409 tests".
+- GitHub "About" blurb still says "246 tests" — should now read "437 tests".
 - Corpus is local only, NOT committed (~17 GB of Parquet). Moved off the full C: drive on 2026-06-06; now lives at `E:\chronoscope_corpus` on Utsav's machine. All backfill/query commands must pass `--root E:\chronoscope_corpus`. The per-day checkpoint moved with it, so re-running resumes (shows already_completed=3601, days_to_process=0). Rebuild from scratch on any machine with `python scripts/build_dscovr_corpus.py --root <path>`.
 - `raw.githubusercontent.com` caches aggressively; fresh `git clone` is the source of truth.
 

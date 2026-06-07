@@ -6,6 +6,53 @@ Format: most recent decisions at the top.
 
 ---
 
+## DEC-008: Event labels in a sibling labels/ tree, joined at query time
+
+**Date:** 2026-06-06
+**Status:** Accepted
+
+**Context:** Phase 2 causal work needs ground-truth event labels (geomagnetic
+activity, ICME passages) cross-referenced against the telemetry corpus. Labels
+come from different sources than telemetry (GFZ, NOAA, Richardson-Cane), have
+different shapes (Kp is a regular 3-hourly series; ICMEs are sparse irregular
+intervals), update on different cadences, and carry different licensing.
+
+**Decision:** Store labels in a sibling `labels/` directory under the corpus
+root -- NOT inside the dscovr/ telemetry partition tree, and NOT as columns on
+telemetry rows. Layout:
+  - labels/geomagnetic/kp_ap.parquet  (3-hourly: timestamp, kp, ap, g_scale, status)
+  - labels/icme/richardson_cane.parquet  (interval table; built next)
+Reading is unified: CorpusReader registers a `kp` view (and later `icme`) when
+the files exist, so telemetry and labels join in one query. Each Kp value covers
+a 3-hour UT interval; the stored timestamp is the interval START, so labeling a
+telemetry row uses an ASOF join (most recent kp.timestamp <= telemetry.timestamp).
+
+**Sources:**
+  - Kp/ap: GFZ JSON webservice (kp.gfz.de/app/json), CC BY 4.0, Matzka et al.
+    2021 DOI 10.5880/Kp.0001. Two calls (Kp, ap) joined on datetime.
+  - G-scale is DERIVED from Kp (G1=Kp5 ... G5=Kp9), not a separate source.
+    Because GFZ reports Kp in thirds (5- = 4.667 is Kp level 5 = G1), the
+    derivation ROUNDS to the nearest Kp level rather than flooring. Raw kp is
+    preserved as source-of-truth.
+  - ICME: Richardson & Cane near-Earth ICME catalog (HTML table at
+    izw1.caltech.edu/ACE/ASC/DATA/level3/icmetable2.htm; DOI 10.7910/DVN/C2MHTH).
+
+**Alternatives considered:**
+- Labels as columns on telemetry: rejected -- would explode multi-day ICME
+  intervals into millions of per-second rows and force unrelated schemas together.
+- Labels inside the dscovr/ partition tree: rejected -- different provenance and
+  update cadence; re-fetching labels must never risk the telemetry corpus.
+- A separate database: rejected -- DuckDB joins across Parquet trees natively;
+  no new storage engine needed.
+
+**Consequences:**
+- Labels and telemetry stay physically separate but logically joinable.
+- Fetch/parse logic lives in src/chronoscope/labels/; read path via CorpusReader.
+- Querying `kp` on a corpus without labels raises a clear error (no silent empty).
+- 28 new tests (24 geomagnetic + 4 reader label-view); suite now 437.
+
+---
+
 ## DEC-007: Physical-plausibility filter as a third storage-layer gate
 
 **Date:** 2026-06-06

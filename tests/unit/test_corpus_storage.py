@@ -605,6 +605,73 @@ class TestCorpusReader:
 
 
 # ---------------------------------------------------------------------------
+# CorpusReader label views (DEC-008)
+# ---------------------------------------------------------------------------
+
+
+class TestCorpusReaderLabels:
+
+    def _write_kp(self, root):
+        """Write a tiny kp_ap label file: two 3-hour intervals on 2017-09-08."""
+        from src.chronoscope.labels.geomagnetic import join_kp_ap, write_kp_labels
+
+        t0 = datetime(2017, 9, 8, 0, 0, 0, tzinfo=timezone.utc)  # Kp 8 -> G4
+        t1 = datetime(2017, 9, 8, 3, 0, 0, tzinfo=timezone.utc)  # Kp 2 -> quiet
+        rows = join_kp_ap({t0: 8.0, t1: 2.0}, {t0: 207, t1: 7})
+        write_kp_labels(rows, root)
+
+    def test_has_labels_false_without_file(self, tmp_path):
+        write_partitioned_parquet(
+            [_make_mag_packet(datetime(2017, 9, 8, 0, 30, tzinfo=timezone.utc))],
+            tmp_path,
+        )
+        with CorpusReader(tmp_path) as reader:
+            assert reader.has_labels() is False
+
+    def test_kp_view_absent_without_file(self, tmp_path):
+        write_partitioned_parquet(
+            [_make_mag_packet(datetime(2017, 9, 8, 0, 30, tzinfo=timezone.utc))],
+            tmp_path,
+        )
+        with CorpusReader(tmp_path) as reader:
+            with pytest.raises(Exception):
+                reader.query("SELECT COUNT(*) FROM kp")
+
+    def test_kp_view_registered_when_present(self, tmp_path):
+        self._write_kp(tmp_path)
+        with CorpusReader(tmp_path) as reader:
+            assert reader.has_labels() is True
+            assert reader.query("SELECT COUNT(*) FROM kp")[0][0] == 2
+
+    def test_asof_join_labels_telemetry(self, tmp_path):
+        from datetime import timedelta
+
+        self._write_kp(tmp_path)
+        t0 = datetime(2017, 9, 8, 0, 0, 0, tzinfo=timezone.utc)
+        t1 = datetime(2017, 9, 8, 3, 0, 0, tzinfo=timezone.utc)
+        write_partitioned_parquet(
+            [
+                _make_mag_packet(t0 + timedelta(minutes=30), bz=-25.0),
+                _make_mag_packet(t1 + timedelta(minutes=30), bz=-3.0),
+            ],
+            tmp_path,
+        )
+        with CorpusReader(tmp_path) as reader:
+            df = reader.query_df(
+                """
+                SELECT m.bz_gse_nt, k.kp, k.g_scale
+                FROM mag m
+                ASOF LEFT JOIN kp k ON m.timestamp >= k.timestamp
+                ORDER BY m.timestamp
+                """
+            )
+        # First row falls in the G4 interval, second in the quiet interval.
+        assert df.iloc[0]["g_scale"] == 4
+        assert df.iloc[0]["kp"] == 8.0
+        assert df.iloc[1]["g_scale"] == 0
+
+
+# ---------------------------------------------------------------------------
 # WriteReport
 # ---------------------------------------------------------------------------
 

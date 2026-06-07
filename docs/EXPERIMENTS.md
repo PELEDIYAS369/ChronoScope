@@ -11,6 +11,52 @@ Format: most recent experiments at the top. Number them sequentially
 
 ---
 
+## EXP-003: Geomagnetic (Kp) labels validated against ground-truth storms
+
+**Date:** 2026-06-06
+**Status:** Complete -- PASS
+
+**Question:** Do the Kp/ap labels fetched from GFZ independently agree with
+known geomagnetic storms -- in particular the Sept 2017 G4 event the telemetry
+already validated against (EXP-001)?
+
+**Setup:**
+- Built src/chronoscope/labels/geomagnetic.py: fetch Kp + ap from the GFZ JSON
+  webservice, derive G-scale (rounding Kp to nearest level), write
+  labels/geomagnetic/kp_ap.parquet. CorpusReader extended with a `kp` view.
+- Fetched the full corpus span (2016-07-26 -> 2026-06-07), ~29k 3-hourly
+  intervals, into E:\chronoscope_corpus\labels.
+
+**Results:**
+- Sept 7-8 2017 window: max Kp 8.333 (= 8+, Kp level 8) -> g_scale 4 (G4).
+  Matches the published G4 classification AND the telemetry signatures from
+  EXP-001 (Bz -34 nT, |B| 34.5 nT, speed 860 km/s) for the same days.
+- Corpus-wide max Kp: 9.0 on 2024-05-10 -- the Gannon / Mother's Day superstorm,
+  the most intense geomagnetic storm in ~20 years (G5, Kp pegged at maximum).
+  Surfaced automatically as the single most intense interval in the decade with
+  no hinting.
+
+**Interpretation:**
+- Two independent data sources (GFZ geomagnetic indices; CDAWeb L1 telemetry)
+  agree the Sept 2017 days were G4. The labels are correctly time-aligned and
+  the G-scale derivation (round, not floor) is right.
+- The labels independently recover the largest documented storm of the era as
+  their top value -- strong evidence the fetch/parse/derive pipeline is faithful.
+- Because MAG telemetry runs to present (plasma stops 2019), the May 2024 G5 is
+  also in the magnetometer corpus -- a future telemetry-vs-label cross-check.
+
+**Implications / next:**
+- Geomagnetic labels are trustworthy and joinable (ASOF join on interval start).
+- Next label source: Richardson-Cane ICME catalog (interval labels, the
+  solar-wind DRIVERS) -- completes the labeling needed for causal validation.
+
+**Reproducibility:**
+- python -m src.chronoscope.labels.geomagnetic --root <corpus> --start 2016-07-26 --end 2026-06-07
+- Join check: ASOF LEFT JOIN kp ON telemetry.timestamp >= kp.timestamp
+- 437 tests (28 new pin the labels + reader views).
+
+---
+
 ## EXP-002: Whole-corpus data-quality validation + density cleanup
 
 **Date:** 2026-06-06
