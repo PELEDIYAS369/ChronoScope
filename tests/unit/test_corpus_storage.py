@@ -670,6 +670,54 @@ class TestCorpusReaderLabels:
         assert df.iloc[0]["kp"] == 8.0
         assert df.iloc[1]["g_scale"] == 0
 
+    def _write_icme(self, root):
+        """Write one ICME interval: 2017-09-07 12:00 .. 2017-09-08 06:00."""
+        from src.chronoscope.labels.icme import parse_icme_rows, write_icme_labels
+
+        nan = float("nan")
+        rowcells = ["2017/09/07 1200", "2017/09/07 1200", "2017/09/08 0600",
+                    "...", "...", "0", "0", "Y", "...", "1", "...",
+                    700.0, 800.0, 30.0, "2", "-142", "...", nan, nan]
+        write_icme_labels(parse_icme_rows([rowcells]), root)
+
+    def test_has_icme_labels_false_without_file(self, tmp_path):
+        write_partitioned_parquet(
+            [_make_mag_packet(datetime(2017, 9, 7, 18, tzinfo=timezone.utc))],
+            tmp_path,
+        )
+        with CorpusReader(tmp_path) as reader:
+            assert reader.has_icme_labels() is False
+
+    def test_icme_view_registered_when_present(self, tmp_path):
+        self._write_icme(tmp_path)
+        with CorpusReader(tmp_path) as reader:
+            assert reader.has_icme_labels() is True
+            assert reader.query("SELECT COUNT(*) FROM icme")[0][0] == 1
+
+    def test_interval_join_selects_in_icme_rows(self, tmp_path):
+        from datetime import timedelta
+
+        self._write_icme(tmp_path)
+        inside = datetime(2017, 9, 7, 18, 0, tzinfo=timezone.utc)
+        before = datetime(2017, 9, 7, 6, 0, tzinfo=timezone.utc)
+        after = datetime(2017, 9, 8, 12, 0, tzinfo=timezone.utc)
+        write_partitioned_parquet(
+            [
+                _make_mag_packet(inside, bz=-25.0),
+                _make_mag_packet(before, bz=-3.0),
+                _make_mag_packet(after, bz=-4.0),
+            ],
+            tmp_path,
+        )
+        with CorpusReader(tmp_path) as reader:
+            n_in = reader.query(
+                """
+                SELECT COUNT(*) FROM mag m
+                JOIN icme i ON m.timestamp BETWEEN i.icme_start AND i.icme_end
+                """
+            )[0][0]
+        assert n_in == 1  # only the 18:00 row is inside the interval
+
 
 # ---------------------------------------------------------------------------
 # WriteReport

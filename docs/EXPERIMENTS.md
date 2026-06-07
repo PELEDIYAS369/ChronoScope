@@ -11,6 +11,62 @@ Format: most recent experiments at the top. Number them sequentially
 
 ---
 
+## EXP-004: ICME interval labels validated; cross-layer agreement on storms
+
+**Date:** 2026-06-06
+**Status:** Complete -- PASS
+
+**Question:** Does the Richardson-Cane ICME catalog parse faithfully, do its
+events match known superstorms, and do the ICME labels agree with the
+independently-sourced Kp labels?
+
+**Setup:**
+- Built src/chronoscope/labels/icme.py: fetch the R&C HTML table, parse the
+  18-meaningful-column grid (live table renders 19 cols incl. a trailing empty
+  one; LASCO at index 17), write labels/icme/richardson_cane.parquet as an
+  INTERVAL table. CorpusReader extended with an `icme` view + interval-join.
+- Parsed the live table (revised 2025-11-07) into 619 ICME intervals,
+  1996-05-27 -> 2025-09-08. Structure: 233 magnetic clouds, 206 partial,
+  180 ejecta. (636 raw rows minus repeated yearly headers.)
+
+**Results:**
+- The three most geoeffective ICMEs (by min Dst) are real, documented
+  superstorms, correctly ranked:
+    1. 2003-11-20: Dst -422 nT (November 2003 superstorm)
+    2. 2024-05-10: Dst -406 nT, V_max 960 km/s (Gannon / Mother's Day storm)
+    3. 2001-03-31: Dst -387 nT (March 2001 storm)
+- Cross-layer check on Gannon (the worst storm within the 2016+ corpus span):
+  the ICME labels (Dst -406, V_max 960, magnetic cloud) and the Kp labels
+  (max Kp 9.0 = G5 during the same ICME interval) INDEPENDENTLY agree it was
+  the era's most extreme storm, with consistent timing.
+- 12,375,959 MAG rows (~4.6% of 271M) fall inside ICME passages -- the
+  causal-ready "ICME-active" labeled telemetry subset.
+
+**Interpretation:**
+- ICME labels are faithful: they rank the catalog era's biggest storms
+  correctly, and they agree with a fully independent data source (Kp) on the
+  flagship event. When an ICME passes, the geomagnetic response spikes in the
+  same window -- exactly the physical coupling the causal engine must recover.
+- Honest scope note: the ICME catalog spans 1996-2025 but telemetry + Kp start
+  2016 (DSCOVR era). The usable labeled overlap is 2016+. Pre-2016 ICME rows
+  simply don't join to telemetry (the Nov 2003 worst-event has no Kp to join,
+  which is why a naive "worst ICME" Kp cross-check returns null -- expected,
+  not a bug).
+
+**Implications / next:**
+- The labeling trio (Kp + derived G-scale + ICME) is complete and
+  cross-validated. The corpus is fully labeled for Phase 2 causal discovery.
+- Perf note: the BETWEEN interval-join over 271M rows x 619 intervals took
+  ~6.5 min (nested scan, no index). For the causal pipeline, materialize an
+  `in_icme` flag once rather than recomputing. Tracked, not urgent.
+
+**Reproducibility:**
+- python -m src.chronoscope.labels.icme --root <corpus>
+- Cross-check: worst ICME since 2016 joined to kp on the interval -> Kp 9 / G5.
+- 464 tests (24 ICME parser + reader icme-view tests).
+
+---
+
 ## EXP-003: Geomagnetic (Kp) labels validated against ground-truth storms
 
 **Date:** 2026-06-06

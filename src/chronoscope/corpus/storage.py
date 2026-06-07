@@ -105,6 +105,8 @@ INSTRUMENT_PLASMA = "plasma"
 # them to telemetry in one query. The corpus layer owns the corpus layout.
 VIEW_KP = "kp"
 LABELS_KP_AP_RELPATH = Path("labels") / "geomagnetic" / "kp_ap.parquet"
+VIEW_ICME = "icme"
+LABELS_ICME_RELPATH = Path("labels") / "icme" / "richardson_cane.parquet"
 
 # Parameter keys carried per instrument. These mirror what the archive
 # ingester writes (DEC-005). Listed explicitly here so the Parquet schema
@@ -598,6 +600,20 @@ class CorpusReader:
             SELECT p.* FROM plasma p
             ASOF LEFT JOIN kp k ON p.timestamp >= k.timestamp
             WHERE k.g_scale >= 4
+
+        The `icme` view is an INTERVAL table (Richardson-Cane catalog). Each row
+        is an ICME passage with icme_start/icme_end. To pull all telemetry
+        inside ICME passages, interval-join:
+
+            SELECT p.* FROM plasma p
+            JOIN icme i ON p.timestamp BETWEEN i.icme_start AND i.icme_end
+
+        or flag whether each telemetry row falls inside any ICME:
+
+            SELECT m.*, (i.source_row IS NOT NULL) AS in_icme
+            FROM mag m
+            LEFT JOIN icme i
+              ON m.timestamp BETWEEN i.icme_start AND i.icme_end
         """
         kp_path = self.root / LABELS_KP_AP_RELPATH
         if kp_path.exists():
@@ -608,10 +624,23 @@ class CorpusReader:
                 SELECT * FROM read_parquet('{path_str}')
                 """
             )
+        icme_path = self.root / LABELS_ICME_RELPATH
+        if icme_path.exists():
+            path_str = str(icme_path).replace("\\", "/")
+            self._conn.execute(
+                f"""
+                CREATE OR REPLACE VIEW {VIEW_ICME} AS
+                SELECT * FROM read_parquet('{path_str}')
+                """
+            )
 
     def has_labels(self) -> bool:
         """True if the geomagnetic `kp` label view is registered."""
         return (self.root / LABELS_KP_AP_RELPATH).exists()
+
+    def has_icme_labels(self) -> bool:
+        """True if the `icme` interval-label view is registered."""
+        return (self.root / LABELS_ICME_RELPATH).exists()
 
     def query(self, sql: str) -> list[tuple]:
         """Run a raw SQL query against the corpus. Returns row tuples."""
