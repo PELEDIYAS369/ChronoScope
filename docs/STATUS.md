@@ -1,7 +1,7 @@
 # ChronoScope — Current Status
 
-**Last updated:** 2026-06-06
-**Last session:** ICME interval labels (Richardson-Cane) built + cross-validated with Kp on the Gannon storm (EXP-004). Labeling trio complete.
+**Last updated:** 2026-06-10
+**Last session:** Labeled training dataset (hourly feature matrix) built (DEC-009/EXP-005); Bz-Kp corr -0.549 confirms known physics at the correlational level. Phase 1 nearly complete.
 
 ---
 
@@ -10,7 +10,7 @@
 **Phase:** Phase 1 of causal-diagnosis engine — foundation for ML work.
 
 **Codebase health:**
-- 464 tests passing (was 437; +24 ICME parser, +3 CorpusReader icme-view)
+- 472 tests passing (was 464; +8 training feature-matrix)
 - HAPI ingester column mapping verified (DEC-005)
 - Corpus storage layer implemented, unit-tested, AND populated with real data (DEC-004 fully executed)
 - **Historical DSCOVR corpus built: 271.4M MAG rows + 1.38M plasma rows across 3,601 days (2016-07-27 -> 2026-06-05), zero failed days**
@@ -79,7 +79,7 @@
   Sept 7-8 2017 G4 storm. Measured min Bz_GSE -33.99 nT, max |B| 34.52 nT, max
   speed 860 km/s vs published DSCOVR record (Bz ~-32.9 GSM, |B| ~34 nT, speed
   ~700+ km/s). Quiet day 2017-09-01 showed max |B| 11 nT. Corpus is faithful.
-- [~] Cross-reference NOAA event catalogs (G-storm, Kp/Ap, Richardson & Cane ICME):
+- [x] Cross-reference NOAA event catalogs (G-storm, Kp/Ap, Richardson & Cane ICME):
   - [x] **Kp/ap geomagnetic labels** (DONE 2026-06-06, DEC-008/EXP-003):
     src/chronoscope/labels/geomagnetic.py fetches GFZ Kp+ap, derives G-scale,
     writes labels/geomagnetic/kp_ap.parquet. CorpusReader registers a `kp` view;
@@ -93,7 +93,14 @@
     Gannon May 2024, Mar 2001); ICME + Kp agree on Gannon (Dst -406, Kp 9/G5).
     ~12.4M MAG rows fall inside ICME passages (labeled subset).
   - NOTE: requires lxml (pandas.read_html backend); pinned in requirements.txt.
-- [ ] Create labeled training dataset
+- [x] **Create labeled training dataset** (DONE 2026-06-10, DEC-009/EXP-005):
+  src/chronoscope/corpus/training.py resamples telemetry to a complete hourly
+  spine and materializes Kp/g_scale (ASOF) + in_icme/mc_flag/dst (interval join)
+  onto it -> derived/hourly_features.parquet. Real run: 84,960 hourly buckets
+  2016-07-27..2026-04-05, MAG 90.7%, Kp 100%, plasma 23,672 (pre-2019), 3,837
+  in-ICME. corr(bz_min, kp) = -0.549 (negative, as physics predicts; the
+  correlational floor PCMCI will improve on). Doubles as the Phase-3 perf item
+  (join paid once on ~85k buckets, not 271M rows; build ~45 s).
 - [ ] Set up evaluation framework for causal diagnosis accuracy
 
 ### Phase 2: Initial causal inference
@@ -170,7 +177,7 @@ If anything looks weird, paste the output back to me and we debug before buildin
 
 ## Notes for Repo Maintenance
 
-- GitHub "About" blurb still says "246 tests" — should now read "464 tests".
+- GitHub "About" blurb still says "246 tests" — should now read "472 tests".
 - Corpus is local only, NOT committed (~17 GB of Parquet). Moved off the full C: drive on 2026-06-06; now lives at `E:\chronoscope_corpus` on Utsav's machine. All backfill/query commands must pass `--root E:\chronoscope_corpus`. The per-day checkpoint moved with it, so re-running resumes (shows already_completed=3601, days_to_process=0). Rebuild from scratch on any machine with `python scripts/build_dscovr_corpus.py --root <path>`.
 - `raw.githubusercontent.com` caches aggressively; fresh `git clone` is the source of truth.
 

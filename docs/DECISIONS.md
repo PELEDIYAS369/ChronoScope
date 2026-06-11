@@ -6,6 +6,53 @@ Format: most recent decisions at the top.
 
 ---
 
+## DEC-009: Labeled training dataset as a materialized hourly feature matrix
+
+**Date:** 2026-06-10
+
+**Status:** Accepted -- EXECUTED
+
+**Context:** Phase 2 causal discovery (PCMCI) needs a regularly-sampled,
+aligned, labeled multivariate time series -- not 271M raw 1-second rows. And
+the live ICME interval-join over full-resolution telemetry took ~6.5 min (271M
+rows x 619 intervals, nested scan). Both are solved by resampling once and
+materializing the labels onto the grid.
+
+**Decision:**
+- Build one derived artifact: <root>/derived/hourly_features.parquet, produced
+  by src/chronoscope/corpus/training.py (build_hourly_features; CLI:
+  python -m src.chronoscope.corpus.training --root <corpus>).
+- Resample telemetry to a COMPLETE regular hourly spine from the first to the
+  last telemetry hour. Hours with no telemetry are present as rows with NULL
+  features (not absent) so the series keeps a regular cadence for PCMCI.
+- MAG -> bz_mean, bz_min (peak southward), bt_mean, bt_max, mag_n. Plasma ->
+  sw_speed_mean/max, density_mean, temp_mean, plasma_n (NULL after 2019-06-27,
+  the H1_FC cutoff).
+- Align labels AT BUILD TIME (paid once, on ~85k buckets not 271M rows):
+  Kp/g_scale via ASOF join; in_icme + icme_mc_flag + icme_dst_min via the
+  interval join (QUALIFY keeps one row per bucket -- the most geoeffective
+  covering ICME if intervals ever overlap).
+- Cadence is parameterised (hour default, minute available); both label sets
+  (kp + icme) must exist or the build raises.
+
+**Alternatives considered:**
+- Materialise in_icme on raw 1-second telemetry: still 271M rows, too fine for
+  PCMCI. Rejected for resample-then-join.
+- Keep recomputing the interval-join live: 6.5 min every run. Rejected.
+- 1-minute default cadence: ~5M rows, finer than the 3-hourly Kp response can
+  resolve for the Bz->Kp link. Offered as an option, not the default.
+
+**Reasoning:** Hourly is the OMNI-standard cadence for space-weather causal
+work; Kp is only 3-hourly so finer telemetry buys little for the target link.
+Resampling before joining turns the expensive nested scan into a cheap
+aggregate plus small joins (build runs in ~45 s on the real corpus). A complete
+spine with NULL gaps is what PCMCI assumes.
+
+**Consequences:** The corpus now has a Phase-2 input that loads instantly
+(~85k rows). Solar-wind-speed-driven causal links are limited to the 2016-2019
+plasma era; MAG-derived (Bz, Bt) -> Kp links use the full ~10 years. The
+artifact is regenerable and untracked (like the corpus and labels).
+
 ## DEC-008: Event labels in a sibling labels/ tree, joined at query time
 
 **Date:** 2026-06-06

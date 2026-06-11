@@ -11,6 +11,51 @@ Format: most recent experiments at the top. Number them sequentially
 
 ---
 
+## EXP-005: Labeled training matrix built; Bz-Kp coupling confirmed (correlational)
+
+**Date:** 2026-06-10
+**Status:** Complete -- PASS
+
+**Question:** Does the assembled pipeline (corpus + Kp + ICME, resampled and
+aligned) produce a sane Phase-2 input, and does it reproduce the known
+southward-Bz / geomagnetic-activity coupling at the correlational level?
+
+**Setup:** Built <root>/derived/hourly_features.parquet via build_hourly_features
+(DEC-009) on the real corpus. Build time ~45 s.
+
+**Results:**
+- 84,960 hourly buckets, 2016-07-27 -> 2026-04-05 (UTC). Complete regular spine.
+- MAG coverage 90.7% (77,073 buckets); ~9% NULL gaps = real data outages.
+- Kp on 100% of buckets (ASOF fill over the full-span Kp labels).
+- Plasma on 23,672 buckets (pre-2019 only) -- matches the H1_FC cutoff.
+- 3,837 buckets (4.5%) inside ICME passages -- matches the 1-second-level
+  fraction (12.4M / 271M = 4.6%); resampling did not distort the labels.
+- corr(bz_min, kp) = -0.549 over the full corpus.
+
+**Interpretation:**
+- NEGATIVE (southward field <-> stronger activity: physics holds) and MODERATE,
+  which is correct. A same-hour linear correlation between hourly-peak Bz and
+  3-hourly Kp cannot approach -1: Kp also depends on solar wind speed, dynamic
+  pressure, the DURATION of southward Bz, and magnetospheric preconditioning,
+  plus a propagation/response lag the same-hour alignment does not capture.
+  Published Bz-Kp/Dst studies land in 0.4-0.7; -0.549 is in band. ~-0.95 would
+  suggest leakage; ~0 would mean something broke.
+- This is the correlational FLOOR for Phase 2. PCMCI tests LAGGED conditional
+  independence (Bz at t -> Kp at t+1,t+2) while conditioning out confounders, so
+  the causal analysis should recover a cleaner directed signal. The number is a
+  sanity check, explicitly NOT a causal result.
+
+**Implications / next:** Corpus is Phase-2-ready. Next: the evaluation framework
+(how causal-diagnosis accuracy is measured), then integrate PCMCI/Tigramite and
+run causal discovery, with Bz -> geomagnetic activity as the known-physics gate.
+
+**Reproducibility:**
+- python -m src.chronoscope.corpus.training --root <corpus>
+- 472 tests (8 training-matrix tests: spine regularity, ASOF Kp fill on gaps,
+  interval in_icme + attributes, plasma nulls, negative Bz-Kp corr, guards).
+
+---
+
 ## EXP-004: ICME interval labels validated; cross-layer agreement on storms
 
 **Date:** 2026-06-06
