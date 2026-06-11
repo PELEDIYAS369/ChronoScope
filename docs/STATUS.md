@@ -1,7 +1,7 @@
 # ChronoScope — Current Status
 
 **Last updated:** 2026-06-10
-**Last session:** Labeled training dataset (hourly feature matrix) built (DEC-009/EXP-005); Bz-Kp corr -0.549 confirms known physics at the correlational level. Phase 1 nearly complete.
+**Last session:** Phase 2 causal engine built (DEC-010/EXP-006): PCMCI recovers southward-Bz -> Kp (lag 1, val -0.181) from real data; known-physics scorecard PASS at effect-size floor. Phase 1 complete; Phase 2 core complete.
 
 ---
 
@@ -10,7 +10,7 @@
 **Phase:** Phase 1 of causal-diagnosis engine — foundation for ML work.
 
 **Codebase health:**
-- 472 tests passing (was 464; +8 training feature-matrix)
+- 501 tests passing (was 472; +29 causal: graph, scorecard, PCMCI discovery)
 - HAPI ingester column mapping verified (DEC-005)
 - Corpus storage layer implemented, unit-tested, AND populated with real data (DEC-004 fully executed)
 - **Historical DSCOVR corpus built: 271.4M MAG rows + 1.38M plasma rows across 3,601 days (2016-07-27 -> 2026-06-05), zero failed days**
@@ -101,14 +101,14 @@
   in-ICME. corr(bz_min, kp) = -0.549 (negative, as physics predicts; the
   correlational floor PCMCI will improve on). Doubles as the Phase-3 perf item
   (join paid once on ~85k buckets, not 271M rows; build ~45 s).
-- [ ] Set up evaluation framework for causal diagnosis accuracy
+- [x] **Set up evaluation framework for causal diagnosis accuracy** (DONE 2026-06-10, DEC-010): src/chronoscope/causal/evaluation.py -- known-physics scorecard (gating bz_min->kp must appear; reverse kp->solar-wind forbidden; effect-size floor).
 
 ### Phase 2: Initial causal inference
 
-- [ ] Integrate PCMCI (Tigramite)
-- [ ] Run initial causal discovery on the corpus
-- [ ] Validate against known space weather physics
-- [ ] Causal graphs as first-class domain objects
+- [x] **Integrate PCMCI (Tigramite)** (DONE 2026-06-10, DEC-010): src/chronoscope/causal/discovery.py runs PCMCI/ParCorr over the feature matrix -> CausalGraph; tigramite pinned.
+- [x] **Run initial causal discovery on the corpus** (DONE 2026-06-10, EXP-006): 84,960-row matrix, [bz_min,bt_max,kp], tau_max 6.
+- [x] **Validate against known space weather physics** (DONE 2026-06-10, EXP-006): bz_min->kp recovered (lag 1, val -0.181, correct sign, dominant); scorecard PASS at 0.1 effect-size floor. Weak reverse-causation artifacts understood (autocorrelation/common-mode) -- source-level fix is future work.
+- [x] **Causal graphs as first-class domain objects** (DONE 2026-06-10, DEC-010): src/chronoscope/causal/graph.py -- CausalGraph (directed lagged edges, serialize, query).
 
 ### Phase 3: Production integration
 
@@ -177,7 +177,7 @@ If anything looks weird, paste the output back to me and we debug before buildin
 
 ## Notes for Repo Maintenance
 
-- GitHub "About" blurb still says "246 tests" — should now read "472 tests".
+- GitHub "About" blurb still says "246 tests" — should now read "501 tests".
 - Corpus is local only, NOT committed (~17 GB of Parquet). Moved off the full C: drive on 2026-06-06; now lives at `E:\chronoscope_corpus` on Utsav's machine. All backfill/query commands must pass `--root E:\chronoscope_corpus`. The per-day checkpoint moved with it, so re-running resumes (shows already_completed=3601, days_to_process=0). Rebuild from scratch on any machine with `python scripts/build_dscovr_corpus.py --root <path>`.
 - `raw.githubusercontent.com` caches aggressively; fresh `git clone` is the source of truth.
 

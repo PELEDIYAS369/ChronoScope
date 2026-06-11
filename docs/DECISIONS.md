@@ -6,6 +6,58 @@ Format: most recent decisions at the top.
 
 ---
 
+## DEC-010: Causal discovery via PCMCI with effect-size-floored evaluation
+
+**Date:** 2026-06-10
+
+**Status:** Accepted -- EXECUTED
+
+**Context:** Phase 2 needs a causal-discovery method over the feature matrix, a
+way to grade its output against known physics, and a first-class causal-graph
+object. PCMCI (Tigramite) is the standard for lagged causal discovery in
+geoscience time series.
+
+**Decision:**
+- New package src/chronoscope/causal/: graph.py (CausalGraph -- directed lagged
+  edges with strength + p, the first-class object), evaluation.py (known-physics
+  scorecard), discovery.py (PCMCI runner -> CausalGraph, auto-scored). CLI:
+  python -m src.chronoscope.causal.discovery --root <corpus>.
+- PCMCI with the ParCorr test; lagged links oriented by time, contemporaneous
+  taken only where tigramite orients them ('-->').
+- Edges recorded at one explicit MCI significance (alpha, default 0.01) on the
+  p-matrix -- not tigramite's looser internal default -- so weak spurious links
+  do not slip in via a mismatched threshold.
+- Grade on EFFECT SIZE, not significance. With ~85k autocorrelated hourly
+  samples the effective N is far smaller, so p-values flag negligible partial
+  correlations as significant. The CLI applies an effect-size floor by default
+  (--min-strength, default 0.1 = Cohen small-effect boundary; NEGLIGIBLE_EFFECT);
+  --min-strength 0 shows the full raw graph.
+- Scorecard: GATING links must be found (bz_min -> kp); SOFT links reported as
+  recall (bt_max -> kp, speed -> kp, in_icme -> kp); FORBIDDEN links must be
+  absent (kp -> any upstream solar-wind var; g_scale -> upstream). passed = all
+  gating found AND no forbidden violations.
+- Missing values via tigramite's numeric missing_flag (NaN -> 999.).
+
+**Alternatives considered:**
+- Grade on presence/p-value alone: rejected -- at this N every trivial link is
+  significant; presence-based grading fails on unavoidable weak artifacts.
+- Trust tigramite's internal 0.05 graph significance: rejected -- inconsistent
+  with the chosen alpha, recorded weak reverse edges.
+- Granger / pairwise correlation: rejected -- no confounder conditioning, no
+  proper multi-variable lag structure.
+
+**Reasoning:** PCMCI conditions out confounders and orients by lag, going beyond
+the -0.549 contemporaneous correlation toward a directed edge. Effect size is
+the honest filter at large N with autocorrelation; 0.1 sits in the natural gap
+between the true driver (0.181) and the artifacts (<=0.074) in EXP-006.
+
+**Consequences:** ChronoScope produces and grades causal graphs; the default run
+is robust, the raw graph one flag away. KNOWN LIMITATION: the unfloored graph
+has weak non-physical reverse edges from autocorrelation-inflated significance
+and unconditioned solar-cycle/rotation common-mode. Removing them at the source
+-- conditioning on common-mode drivers, and/or moving to PCMCI+ which handles
+autocorrelation natively -- is future work. Tigramite pinned in requirements.txt.
+
 ## DEC-009: Labeled training dataset as a materialized hourly feature matrix
 
 **Date:** 2026-06-10

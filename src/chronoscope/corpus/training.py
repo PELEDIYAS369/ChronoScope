@@ -42,9 +42,12 @@ from src.chronoscope.corpus.storage import CorpusReader
 
 logger = structlog.get_logger(__name__)
 
+# Canonical output path for the default (hourly) labeled feature matrix.
+HOURLY_FEATURES_RELPATH = Path("derived") / "hourly_features.parquet"
+
 # cadence name -> (date_trunc unit, generate_series interval literal, default output)
 _CADENCE = {
-    "hour": ("hour", "INTERVAL '1 hour'", Path("derived") / "hourly_features.parquet"),
+    "hour": ("hour", "INTERVAL '1 hour'", HOURLY_FEATURES_RELPATH),
     "minute": ("minute", "INTERVAL '1 minute'", Path("derived") / "minute_features.parquet"),
 }
 
