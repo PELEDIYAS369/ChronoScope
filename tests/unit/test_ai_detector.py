@@ -365,6 +365,22 @@ class TestDisplayFormat:
         assert "RECOMMENDED" in formatted
         assert "Human operator decision required" in formatted
 
+    def test_no_fabricated_historical_framing(self):
+        """Honesty guard (DEC-012): the rule-based detector must not present
+        fabricated empirical precedent -- no 'historical precedent' phrasing,
+        no 'similar events' count, in display or serialization."""
+        detector = AnomalyDetector()
+        packet = make_packet({"bulk_speed_km_s": 700.0})
+        speed_reports = [
+            r for r in detector.analyze_packet(packet)
+            if r.flag.parameter_name == "bulk_speed_km_s"
+        ]
+        assert speed_reports, "expected a speed anomaly report"
+        formatted = speed_reports[0].format_for_display()
+        assert "Historical precedent" not in formatted
+        assert "similar events" not in formatted
+        assert "similar_events_count" not in speed_reports[0].to_dict()
+
     def test_to_dict_complete(self):
         detector = AnomalyDetector()
         packet = make_packet({"bulk_speed_km_s": 700.0})
