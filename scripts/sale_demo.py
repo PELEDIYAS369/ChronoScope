@@ -144,7 +144,7 @@ def run_sale_demo():
             print(f"    Reason:      {flag.reason}")
             if report.suggested_actions:
                 top = report.suggested_actions[0]
-                print(f"    Top action:  {top.title} ({top.success_rate * 100:.0f}% success)")
+                print(f"    Top action:  {top.title} (~{top.success_rate * 100:.0f}% est. success)")
     else:
         print("  No anomalies detected — all parameters nominal ✓")
 

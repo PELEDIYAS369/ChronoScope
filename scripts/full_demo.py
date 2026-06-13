@@ -210,7 +210,7 @@ def run():
                 action.action_id == show.recommended_action_id
             ) else ""
             print(f"    {action.priority}. {action.title}{rec}")
-            print(f"       Success rate: {action.success_rate * 100:.1f}%")
+            print(f"       Est. success rate: ~{action.success_rate * 100:.0f}%")
             print(f"       Time needed:  {action.time_required_minutes:.0f} min")
 
     else:
@@ -227,9 +227,9 @@ def run():
 
         print(f"  Anomaly:      {report.flag.parameter_name}")
         print(f"  AI suggests:  {recommended.title if recommended else 'N/A'}")
-        print(f"  Success rate: "
-              f"{recommended.success_rate * 100:.1f}% "
-              f"if recommended else 'N/A'")
+        rate_txt = (f"~{recommended.success_rate * 100:.0f}% (est.)"
+                    if recommended else "N/A")
+        print(f"  Est. success rate: {rate_txt}")
         print(f"\n  [SIMULATED] Operator accepts recommendation...")
 
         cs.operator_decides(
