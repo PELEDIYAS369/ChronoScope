@@ -6,6 +6,45 @@ Format: most recent decisions at the top.
 
 ---
 
+## DEC-012: Honesty cleanup -- remove fabricated metrics from README and detector
+
+**Date:** 2026-06-13
+
+**Status:** Accepted -- EXECUTED
+
+**Context:** The README and the rule-based anomaly detector presented fabricated
+numbers as if measured: a "89% historical success rate", "Confidence: 86%", and
+similar_events_count literals (2841/847/89/...) framed as a database of
+"historical precedent". No such database or model existed -- the values were
+hand-set. With the causal engine now genuinely validated (DEC-010/011), the
+project has real results to show and every reason to drop invented ones, which
+would destroy credibility with any reviewer (CDL, employers, pilots).
+
+**Decision:**
+- README rewritten: stale test badge 334 -> 511; removed the fabricated
+  success-rate / confidence / ROI claims; foregrounded the validated causal
+  engine (corpus, Bz->Kp discovery, Gannon attribution, EXP-001/003/004/006/007);
+  added an explicit "Honest Scope" section (validated vs not-yet-built).
+- detector.py: removed similar_events_count entirely (a fabricated count with no
+  honest value). Relabeled success_rate as an ESTIMATED operational prior
+  (hand-set, not measured) in docstrings and display; dropped false precision
+  (89.3% -> ~89%). The detector is now documented as rule-based, not a model.
+- Removed similar_events_count from the API schema/routes too (pre-launch
+  contract change). The unrelated ingestion success_rate (a real fetch metric)
+  was left untouched.
+
+**Alternatives considered:**
+- Keep the numbers as "illustrative": rejected -- they were presented as
+  empirical. Relabeling success_rate as an estimate is honest; a specific
+  fabricated event count (2841) has no honest framing, so it is removed.
+- Rename success_rate: rejected as needless churn -- it is a legitimate field for
+  an estimated prior once documented as such.
+
+**Consequences:** The public face and the detector now match the project's
+honesty standard (DEC-002). 511 tests still pass (test_ai_detector + integration
+API updated). If the causal engine later supplies real event-similarity, an
+honest count can return.
+
 ## DEC-011: Causal explanation via a structural model on discovered parents
 
 **Date:** 2026-06-13

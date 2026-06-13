@@ -180,16 +180,6 @@ class TestSolarWindSpeedDetection:
         ]
         assert speed_reports[0].urgency_hours > 0
 
-    def test_similar_events_count_present(self):
-        detector = AnomalyDetector()
-        packet = make_packet({"bulk_speed_km_s": 700.0})
-        reports = detector.analyze_packet(packet)
-        speed_reports = [
-            r for r in reports
-            if r.flag.parameter_name == "bulk_speed_km_s"
-        ]
-        assert speed_reports[0].similar_events_count > 0
-
 
 # ---------------------------------------------------------------------------
 # Magnetic Field Bz — Critical Detection
@@ -371,7 +361,7 @@ class TestDisplayFormat:
         assert "WHAT HAPPENED" in formatted
         assert "WHY IT MATTERS" in formatted
         assert "SUGGESTED ACTIONS" in formatted
-        assert "Success rate:" in formatted
+        assert "Est. success rate:" in formatted
         assert "RECOMMENDED" in formatted
         assert "Human operator decision required" in formatted
 
@@ -389,4 +379,4 @@ class TestDisplayFormat:
         assert "suggested_actions" in d
         assert "recommended_action_id" in d
         assert "urgency_hours" in d
-        assert "similar_events_count" in d
+        assert "similar_events_count" not in d

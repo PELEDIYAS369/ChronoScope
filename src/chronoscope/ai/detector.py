@@ -3,21 +3,24 @@
 # Unauthorized use, copying, or distribution is strictly prohibited.
 
 """
-ChronoScope AI — Anomaly Detection Engine
-Watches all telemetry parameters simultaneously.
+ChronoScope — Rule-Based Anomaly Detection Engine
+Watches all telemetry parameters simultaneously against hand-authored rules.
 Flags anomalies with:
   - What happened (plain English)
   - Why it matters (operational context)
-  - Suggested actions ranked by success rate
+  - Suggested actions, each with an ESTIMATED success rate
   - Urgency — how long before action required
-  - Confidence score
-  - Historical precedent count
+  - A confidence score
+
+This is a rule-based engine, not a trained model. The per-action success rates
+and urgency values are hand-set operational priors (expert judgement), NOT
+statistics measured from a historical event database.
 
 Rules:
   1. Every flag MUST have a human-readable reason
   2. Every flag MUST have at least one suggested action
-  3. Every suggested action MUST have a success rate
-  4. The AI NEVER makes decisions — it recommends
+  3. Every suggested action carries an estimated (not measured) success rate
+  4. The engine NEVER makes decisions — it recommends
   5. Human operator always has final control
 """
 
@@ -50,13 +53,17 @@ logger = structlog.get_logger(__name__)
 class SuggestedAction:
     """
     A concrete action an operator can take in response to an anomaly.
-    Includes success rate based on historical precedent.
+
+    `success_rate` is an ESTIMATED operational prior, hand-set per rule (how
+    reliable this action tends to be, in the author's judgement). It is NOT
+    measured from a historical database -- treat it as expert guidance, not an
+    empirical statistic.
     """
     action_id: str
     title: str
     description: str
     steps: list[str]
-    success_rate: float          # 0.0 to 1.0
+    success_rate: float          # 0.0–1.0 — hand-set estimate, not measured
     time_required_minutes: float
     risk_if_skipped: str
     priority: int                # 1 = highest priority
@@ -117,7 +124,6 @@ class AnomalyReport:
     suggested_actions: list[SuggestedAction]
     recommended_action_id: str
     urgency_hours: float
-    similar_events_count: int
     operator_decision: str | None = None
     operator_actor: str | None = None
     outcome: str | None = None
@@ -157,7 +163,6 @@ class AnomalyReport:
             "what_happened": self.what_happened,
             "why_it_matters": self.why_it_matters,
             "urgency_hours": self.urgency_hours,
-            "similar_events_count": self.similar_events_count,
             "suggested_actions": [
                 a.to_dict() for a in self.suggested_actions
             ],
@@ -201,7 +206,7 @@ class AnomalyReport:
             ) else ""
             lines += [
                 f"Action {action.priority}: {action.title}{rec}",
-                f"  Success rate: {action.success_rate * 100:.1f}%",
+                f"  Est. success rate: ~{action.success_rate * 100:.0f}%",
                 f"  Time needed:  {action.time_required_minutes:.0f} minutes",
                 f"  Steps:",
             ]
@@ -214,7 +219,6 @@ class AnomalyReport:
 
         lines += [
             "-" * 40,
-            f"Historical precedent: {self.similar_events_count} similar events",
             "",
             "Human operator decision required.",
             "AI recommendation only. You are in control.",
@@ -244,7 +248,6 @@ class DetectionRule:
     why_it_matters: str
     suggested_actions: list[SuggestedAction]
     urgency_hours: float
-    similar_events_count: int
     confidence_base: float = 0.85
 
     def evaluate(
@@ -324,7 +327,6 @@ class DetectionRule:
             suggested_actions=self.suggested_actions,
             recommended_action_id=recommended.action_id,
             urgency_hours=self.urgency_hours,
-            similar_events_count=self.similar_events_count,
         )
 
 
@@ -373,7 +375,6 @@ def build_dscovr_rules() -> list[DetectionRule]:
                 ),
             ],
             urgency_hours=8.0,
-            similar_events_count=2841,
         ),
 
         # Solar wind speed — high
@@ -438,7 +439,6 @@ def build_dscovr_rules() -> list[DetectionRule]:
                 ),
             ],
             urgency_hours=2.0,
-            similar_events_count=847,
         ),
 
         # Solar wind speed — critical CME
@@ -477,7 +477,6 @@ def build_dscovr_rules() -> list[DetectionRule]:
                 ),
             ],
             urgency_hours=0.5,
-            similar_events_count=89,
         ),
 
         # Proton density
@@ -526,7 +525,6 @@ def build_dscovr_rules() -> list[DetectionRule]:
                 ),
             ],
             urgency_hours=4.0,
-            similar_events_count=1243,
         ),
 
         # Magnetic field Bz southward
@@ -580,7 +578,6 @@ def build_dscovr_rules() -> list[DetectionRule]:
                 ),
             ],
             urgency_hours=0.5,
-            similar_events_count=312,
         ),
 
         # Magnetic field Bt extreme
@@ -618,7 +615,6 @@ def build_dscovr_rules() -> list[DetectionRule]:
                 ),
             ],
             urgency_hours=0.5,
-            similar_events_count=47,
         ),
 
         # Aviation altitude anomaly
@@ -655,7 +651,6 @@ def build_dscovr_rules() -> list[DetectionRule]:
                 ),
             ],
             urgency_hours=0.1,
-            similar_events_count=156,
         ),
     ]
 # ---------------------------------------------------------------------------

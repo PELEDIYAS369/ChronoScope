@@ -119,7 +119,6 @@ class AnomalyReportResponse(BaseModel):
     what_happened: str
     why_it_matters: str
     urgency_hours: float
-    similar_events_count: int
     suggested_actions: list[SuggestedActionResponse]
     recommended_action_id: str
     operator_decision: str | None

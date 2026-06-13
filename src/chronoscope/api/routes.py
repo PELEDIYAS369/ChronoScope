@@ -106,7 +106,6 @@ def report_to_response(report) -> AnomalyReportResponse:
         what_happened=report.what_happened,
         why_it_matters=report.why_it_matters,
         urgency_hours=report.urgency_hours,
-        similar_events_count=report.similar_events_count,
         suggested_actions=actions,
         recommended_action_id=report.recommended_action_id,
         operator_decision=report.operator_decision,

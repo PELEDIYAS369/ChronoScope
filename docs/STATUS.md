@@ -1,7 +1,7 @@
 # ChronoScope — Current Status
 
-**Last updated:** 2026-06-10
-**Last session:** First causal attribution (DEC-011/EXP-007): explanation layer attributes the Gannon superstorm (Kp 9) to sustained extreme southward Bz (-59 nT); full vs driver-attribution modes. Phase 3 underway.
+**Last updated:** 2026-06-13
+**Last session:** Honesty cleanup (DEC-012): rewrote README (removed fabricated success-rate/precedent metrics, badge 334->511, foregrounded the validated causal engine) and relabeled the rule-based detector (removed fabricated similar_events_count; success_rate now an explicit hand-set estimate). 511 tests.
 
 ---
 
