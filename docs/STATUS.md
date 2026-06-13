@@ -1,13 +1,15 @@
 # ChronoScope — Current Status
 
 **Last updated:** 2026-06-13
-**Last session:** Honesty cleanup (DEC-012): rewrote README (removed fabricated success-rate/precedent metrics, badge 334->511, foregrounded the validated causal engine) and relabeled the rule-based detector (removed fabricated similar_events_count; success_rate now an explicit hand-set estimate). 511 tests.
+**Last session:** Completed the causal engine end-to-end. Attribution layer (DEC-011/EXP-007) plus a narrated demo (scripts/causal_demo.py) that runs the full pipeline on the corpus -- discovers Bz->Kp (scorecard PASS) and attributes the Gannon Kp-9 to sustained -59 nT southward Bz. Finished the honesty cleanup (DEC-012) across README, detector, API, and demos -- no fabricated metrics remain, guarded by a regression test. 511 tests, all committed and verified on remote.
+
+**Next session:** Build + cleanup are done; remaining work is *showing* it. (1) Make the repo public (currently private -> evidence invisible to reviewers). (2) Finalize + publish the write-up draft. (3) CDL application by July 10. (4) Remaining Phase 3 code (causal engine -> audit chain, REST API) and a pilot partner for real spacecraft housekeeping telemetry.
 
 ---
 
 ## Where We Are Right Now
 
-**Phase:** Phase 1 of causal-diagnosis engine — foundation for ML work.
+**Phase:** Phase 3 (production integration). Phase 1 (foundation) and Phase 2 (causal engine) complete; explanation generator + performance optimization done; audit-chain and REST API remaining.
 
 **Codebase health:**
 - 511 tests passing (was 501; +10 causal explanation/attribution)
@@ -116,6 +118,8 @@
 - [x] **Causal explanation generator** (DONE 2026-06-13, DEC-011/EXP-007): src/chronoscope/causal/explanation.py -- structural model on discovered parents; full + driver-attribution modes; attributes the Gannon Kp-9 to sustained southward Bz.
 - [ ] REST API for causal queries
 - [x] **Performance optimization** (DONE 2026-06-10, DEC-009): the materialized hourly feature matrix does the expensive interval-join once (~85k rows, ~45 s) instead of recomputing over 271M rows.
+
+**Showcase:** `scripts/causal_demo.py` (DONE 2026-06-13) narrates the full causal pipeline on the corpus -- discovered Bz->Kp + scorecard PASS + Gannon attribution; the README Quick Start leads with it. A public technical write-up is drafted, not yet published.
 
 ---
 
