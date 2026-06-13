@@ -234,6 +234,9 @@ pytest tests/ -q
 # Build the corpus (one-time; resumable; ~17 GB of Parquet on disk)
 python scripts/build_dscovr_corpus.py --root <corpus_path>
 
+# Narrated causal-diagnosis demo -- start here (discovered physics + Gannon attribution)
+python scripts/causal_demo.py --root <corpus_path>
+
 # Discover the causal graph and attribute the strongest events
 python -m src.chronoscope.causal.discovery   --root <corpus_path> --save
 python -m src.chronoscope.causal.explanation  --root <corpus_path> --top 5 --exogenous
