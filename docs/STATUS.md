@@ -1,7 +1,7 @@
 # ChronoScope — Current Status
 
 **Last updated:** 2026-06-10
-**Last session:** Phase 2 causal engine built (DEC-010/EXP-006): PCMCI recovers southward-Bz -> Kp (lag 1, val -0.181) from real data; known-physics scorecard PASS at effect-size floor. Phase 1 complete; Phase 2 core complete.
+**Last session:** First causal attribution (DEC-011/EXP-007): explanation layer attributes the Gannon superstorm (Kp 9) to sustained extreme southward Bz (-59 nT); full vs driver-attribution modes. Phase 3 underway.
 
 ---
 
@@ -10,7 +10,7 @@
 **Phase:** Phase 1 of causal-diagnosis engine — foundation for ML work.
 
 **Codebase health:**
-- 501 tests passing (was 472; +29 causal: graph, scorecard, PCMCI discovery)
+- 511 tests passing (was 501; +10 causal explanation/attribution)
 - HAPI ingester column mapping verified (DEC-005)
 - Corpus storage layer implemented, unit-tested, AND populated with real data (DEC-004 fully executed)
 - **Historical DSCOVR corpus built: 271.4M MAG rows + 1.38M plasma rows across 3,601 days (2016-07-27 -> 2026-06-05), zero failed days**
@@ -113,9 +113,9 @@
 ### Phase 3: Production integration
 
 - [ ] Causal engine → audit chain
-- [ ] Causal explanation generator
+- [x] **Causal explanation generator** (DONE 2026-06-13, DEC-011/EXP-007): src/chronoscope/causal/explanation.py -- structural model on discovered parents; full + driver-attribution modes; attributes the Gannon Kp-9 to sustained southward Bz.
 - [ ] REST API for causal queries
-- [ ] Performance optimization
+- [x] **Performance optimization** (DONE 2026-06-10, DEC-009): the materialized hourly feature matrix does the expensive interval-join once (~85k rows, ~45 s) instead of recomputing over 271M rows.
 
 ---
 
@@ -177,7 +177,7 @@ If anything looks weird, paste the output back to me and we debug before buildin
 
 ## Notes for Repo Maintenance
 
-- GitHub "About" blurb still says "246 tests" — should now read "501 tests".
+- GitHub "About" blurb still says "246 tests" — should now read "511 tests".
 - Corpus is local only, NOT committed (~17 GB of Parquet). Moved off the full C: drive on 2026-06-06; now lives at `E:\chronoscope_corpus` on Utsav's machine. All backfill/query commands must pass `--root E:\chronoscope_corpus`. The per-day checkpoint moved with it, so re-running resumes (shows already_completed=3601, days_to_process=0). Rebuild from scratch on any machine with `python scripts/build_dscovr_corpus.py --root <path>`.
 - `raw.githubusercontent.com` caches aggressively; fresh `git clone` is the source of truth.
 

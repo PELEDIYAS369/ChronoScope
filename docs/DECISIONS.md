@@ -6,6 +6,49 @@ Format: most recent decisions at the top.
 
 ---
 
+## DEC-011: Causal explanation via a structural model on discovered parents
+
+**Date:** 2026-06-13
+
+**Status:** Accepted -- EXECUTED
+
+**Context:** Causal discovery (DEC-010) yields the STRUCTURE (which drivers, at
+which lags, cause Kp). To attribute a specific event to its cause we need effect
+MAGNITUDES and a per-event decomposition.
+
+**Decision:**
+- src/chronoscope/causal/explanation.py: fit a linear structural equation on
+  exactly the discovered causal parents of the target (the graph IS the feature
+  selection), then decompose an event into per-driver contributions.
+  CLI: python -m src.chronoscope.causal.explanation --root <corpus> [--top N]
+       [--exogenous] [--exo-window H].
+- Two attribution views, both legitimate, labelled explicitly:
+  * FULL model (default): discovered parents incl. target autocorrelation. High
+    R^2 but the persistence term absorbs the driver effect (it already showed up
+    in the previous hour), UNDER-crediting the exogenous cause.
+  * DRIVER attribution (--exogenous): drop autoregressive terms, spread each
+    exogenous driver over lags 1..W (default 6). Estimates the CUMULATIVE causal
+    effect of sustained forcing -- physically motivated (the magnetosphere
+    integrates southward Bz over hours) and the honest view for storm attribution.
+- Loads saved causal_graph.json if present, else runs discovery; missing rows
+  dropped at fit time.
+
+**Alternatives considered:**
+- A single attribution mode: rejected -- neither alone is honest (full hides the
+  cause in persistence; driver ignores persistence). Present both, labelled.
+- do-calculus / counterfactual estimation: out of scope for v1; output and docs
+  frame this as linear effect estimation UNDER the discovered DAG, not proof.
+
+**Reasoning:** Using discovered parents as predictors avoids spurious regressors;
+the driver mode's distributed lag matches cumulative-forcing physics.
+
+**Consequences:** First product capability -- attributing geomagnetic events to
+their causal drivers. KNOWN LIMITATION: the model is LINEAR, so on extreme storms
+it over-predicts past the Kp ceiling of 9 (Kp saturates; the linear model
+extrapolates) -- see EXP-007. Saturating/nonlinear coupling is future work.
+Per-spacecraft anomaly diagnosis (vs geomagnetic-index attribution) needs
+spacecraft housekeeping telemetry, not yet available.
+
 ## DEC-010: Causal discovery via PCMCI with effect-size-floored evaluation
 
 **Date:** 2026-06-10

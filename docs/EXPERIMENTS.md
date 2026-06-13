@@ -11,6 +11,63 @@ Format: most recent experiments at the top. Number them sequentially
 
 ---
 
+## EXP-007: Plasma-era discovery + first causal attribution of the Gannon storm
+
+**Date:** 2026-06-13
+**Status:** Complete -- PASS (with documented caveats)
+
+**Question:** (a) Does the richer plasma-era variable set recover more known
+drivers? (b) Can the explanation layer attribute the Gannon superstorm to its
+causal driver?
+
+**Setup:**
+- Discovery over [bz_min, bt_max, sw_speed_mean, density_mean, kp], tau_max 6,
+  default 0.1 effect-size floor, 84,960-row matrix.
+- Attribution via explanation.py over the top-5 Kp hours, both modes.
+
+**Results -- richer discovery:**
+- bz_min -> kp ROBUST: lag 1, val -0.182 (matches the 3-var -0.181) even with the
+  bigger set. Scorecard PASS.
+- Secondary drivers (sw_speed_mean, density_mean, bt_max) do NOT clear the 0.1
+  floor. Honest reasons: plasma 72% missing (effective ~24k rows), and
+  conditioning on Bz absorbs their shared variance (fast streams co-occur with
+  southward Bz) so their DIRECT effect is weaker. One real cross-link appeared:
+  density_mean -> bt_max (0.151).
+
+**Results -- first attribution (Gannon, May 11 2024, Kp 9):**
+- The 5 highest-Kp hours in 10 years are all Gannon; each preceded (1 h) by
+  EXTREME southward Bz, -35 to -59 nT.
+- FULL model (R^2 0.877): persistence-dominated (kp lag-1 coef 0.89); bz_min only
+  ~+1.7 vs persistence ~+7.8 -- misleading, since persistence is itself downstream
+  of sustained forcing.
+- DRIVER model (--exogenous, R^2 0.470): bz_min at lags 1-6, all coefficients
+  negative; the Kp-9 attributed to sustained extreme southward Bz summed over 6 h
+  (correct causal direction, persistence removed).
+
+**Interpretation:**
+- The engine attributes the era's biggest storm to its actual cause: sustained
+  extreme southward IMF. Correct sign, timing, dominant driver.
+- The driver model OVER-predicts (Kp ~15-16 vs observed 9): physically
+  meaningful, because Kp SATURATES at 9 while the linear model extrapolates the
+  extraordinary forcing past the ceiling -- the forcing far exceeded what is
+  needed to max out the index.
+- Caveats: full-model attribution is persistence-confounded; the linear model
+  ignores Kp saturation/nonlinearity; speed/density are not Kp parents at the
+  conservative floor.
+
+**Implications / next:** First product capability (causal attribution of
+geomagnetic events). Next: saturating/nonlinear coupling for the Kp ceiling;
+plasma-era refinement for secondary drivers; then spacecraft-anomaly diagnosis
+(needs spacecraft telemetry) and the REST API.
+
+**Reproducibility:**
+- discovery --vars bz_min,bt_max,sw_speed_mean,density_mean,kp
+- explanation --top 5            (full model)
+- explanation --top 5 --exogenous (driver model)
+- 511 tests (10 explanation: structural fit, event attribution, both modes, guards).
+
+---
+
 ## EXP-006: PCMCI recovers southward-Bz -> Kp causation from real data
 
 **Date:** 2026-06-10
