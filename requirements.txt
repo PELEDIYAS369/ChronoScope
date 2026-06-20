@@ -35,7 +35,7 @@ markdown-it-py==4.2.0
 MarkupSafe==3.0.3
 marshmallow==4.3.0
 mdurl==0.1.2
-msgpack==1.1.2
+msgpack==1.2.1
 nltk==3.9.4
 numpy==2.2.1
 packageurl-python==0.17.6
