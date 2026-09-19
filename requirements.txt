@@ -1,6 +1,6 @@
 annotated-doc==0.0.4
 annotated-types==0.7.0
-anyio==4.13.0
+anyio==4.14.2
 Authlib==1.7.2
 bitarray==2.9.3
 bitstring==4.1.4
